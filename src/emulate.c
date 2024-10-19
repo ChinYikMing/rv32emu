@@ -79,9 +79,7 @@ static void rv_trap_default_handler(riscv_t *rv)
  * the registered trap handler, PC by PC. Once the trap is handled,
  * resume the previous execution flow where cause the trap.
  *
- * Since the system emulation has not yet included in rv32emu, the page
- * fault is not practical in current test suite. Instead, we try to
- * emulate the misaligned handling in the test suite.
+ * Now, rv32emu supports misaligned access and page fault handling.
  */
 #if RV32_HAS(SYSTEM)
 static void trap_handler(riscv_t *rv);
