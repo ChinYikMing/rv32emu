@@ -49,10 +49,28 @@ void u8250_check_ready(u8250_state_t *uart)
         uart->in_ready = true;
 }
 
+static bool start_flush = false;
+static uint64_t counter = 0;
+
 static void u8250_handle_out(u8250_state_t *uart, uint8_t value)
 {
     if (write(uart->out_fd, &value, 1) < 1)
         fprintf(stderr, "failed to write UART output: %s\n", strerror(errno));
+
+    /*
+     * Starting to flush console after reaching 'Welcome to buildroot'
+     * to debug that the 'buildroot login:' is shown but do not been flushed only
+     *
+     * The reason I guess is because the login shell is interactive program, so
+     * the a proper web shell should be implemented to hand over the login shell.
+     */
+    if(value == 0x57 && counter > 10000){
+        start_flush = true;
+    }
+
+    if(start_flush){
+        fsync(uart->out_fd);
+    }
 }
 
 #ifdef __EMSCRIPTEN__
