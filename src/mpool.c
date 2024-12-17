@@ -31,7 +31,7 @@ typedef struct mpool {
 static void *mem_arena(size_t sz)
 {
     void *p;
-#if HAVE_MMAP
+#if HAVE_MMAP && !defined(__EMSCRIPTEN__)
     p = mmap(0, sz, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
     if (p == MAP_FAILED)
         return NULL;

@@ -234,10 +234,13 @@ void indirect_rv_halt()
 
 int main(int argc, char **args)
 {
+    printf("abc\n");
+    printf("size: %x\n", MEM_SIZE);
     if (argc == 1 || !parse_args(argc, args)) {
         print_usage(args[0]);
         return 1;
     }
+    printf("456\n");
 
     int run_flag = 0;
 #if !RV32_HAS(SYSTEM) || (RV32_HAS(SYSTEM) && RV32_HAS(ELF_LOADER))
@@ -276,6 +279,7 @@ int main(int argc, char **args)
         goto end;
     }
 
+    printf("123\n");
     rv_run(rv);
 
     /* dump registers as JSON */

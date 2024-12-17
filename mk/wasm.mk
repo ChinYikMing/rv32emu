@@ -29,7 +29,9 @@ CFLAGS_emcc += -sINITIAL_MEMORY=2GB \
 	       -s"EXPORTED_FUNCTIONS=$(EXPORTED_FUNCS)" \
 	       -sSTACK_SIZE=4MB \
 	       -sPTHREAD_POOL_SIZE=navigator.hardwareConcurrency \
-	       --embed-file build@/ \
+	       --embed-file build/linux-image/Image@/Image \
+	       --embed-file build/linux-image/rootfs.cpio@/rootfs.cpio \
+	       --embed-file build/minimal.dtb@/minimal.dtb \
 	       --embed-file build/riscv32@/riscv32 \
 	       --embed-file build/timidity@/etc/timidity \
 	       -DMEM_SIZE=0x40000000 \
@@ -84,7 +86,7 @@ endif
 
 # used to serve wasm locally
 DEMO_IP := 127.0.0.1
-DEMO_PORT := 8000
+DEMO_PORT := 8001
 
 # check if demo root directory exists and create it if not
 check-demo-dir-exist:

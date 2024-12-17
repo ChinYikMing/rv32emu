@@ -623,6 +623,8 @@ retranslate:
         }
 #endif
 
+	//printf("value at 0: %x\n", *(uint32_t *)(PRIV(rv)->mem->mem_base));
+ 	//printf("PC: %x, %d\n", block->pc_end, need_retranslate);
         assert(insn);
 
         /* decode the instruction */
