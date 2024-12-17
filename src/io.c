@@ -24,7 +24,7 @@ memory_t *memory_new(uint32_t size)
 
     memory_t *mem = malloc(sizeof(memory_t));
     assert(mem);
-#if HAVE_MMAP
+#if HAVE_MMAP && !defined(__EMSCRIPTEN__)
     data_memory_base = mmap(NULL, size, PROT_READ | PROT_WRITE,
                             MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
     if (data_memory_base == MAP_FAILED) {

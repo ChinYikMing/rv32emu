@@ -272,8 +272,9 @@ MMU_FAULT_CHECK_IMPL(write, pagefault_store)
 extern bool need_retranslate;
 static uint32_t mmu_ifetch(riscv_t *rv, const uint32_t addr)
 {
-    if (!rv->csr_satp)
+    if (!rv->csr_satp){
         return memory_ifetch(addr);
+    }
 
     uint32_t level;
     pte_t *pte = mmu_walk(rv, addr, &level);

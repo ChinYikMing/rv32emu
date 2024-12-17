@@ -232,18 +232,17 @@ static void map_file(char **ram_loc, const char *name)
     struct stat st;
     fstat(fd, &st);
 
-#if HAVE_MMAP
+#if HAVE_MMAP && !defined(__EMSCRIPTEN__)
     /* remap to a memory region */
     *ram_loc = mmap(*ram_loc, st.st_size, PROT_READ | PROT_WRITE,
                     MAP_FIXED | MAP_PRIVATE, fd, 0);
     if (*ram_loc == MAP_FAILED)
         goto cleanup;
 #else
+    printf("calloc mmap\n");
     /* calloc and load data to a memory region */
-    *ram_loc = calloc(st.st_size, sizeof(uint8_t));
-    if (!*ram_loc)
-        goto cleanup;
     if (read(fd, *ram_loc, st.st_size) != st.st_size) {
+        printf("free here\n");
         free(*ram_loc);
         goto cleanup;
     }
@@ -332,6 +331,7 @@ riscv_t *rv_create(riscv_user_t rv_attr)
     /* copy over the attr */
     rv->data = rv_attr;
 
+    printf("memory\n");
     vm_attr_t *attr = PRIV(rv);
     attr->mem = memory_new(attr->mem_size);
     assert(attr->mem);
@@ -345,6 +345,7 @@ riscv_t *rv_create(riscv_user_t rv_attr)
      * rv_remap_stdstream() can be called to overwrite them
      *
      */
+    printf("remap\n");
     attr->fd_map = map_init(int, FILE *, map_cmp_int);
     rv_remap_stdstream(rv,
                        (fd_stream_pair_t[]){
@@ -408,9 +409,11 @@ riscv_t *rv_create(riscv_user_t rv_attr)
      * *----------------*----------------*-------*
      */
 
+    printf("map_file1\n");
     char *ram_loc = (char *) attr->mem->mem_base;
     map_file(&ram_loc, attr->data.system.kernel);
 
+    printf("map_file2\n");
     uint32_t dtb_addr = attr->mem->mem_size - (1 * 1024 * 1024);
     ram_loc = ((char *) attr->mem->mem_base) + dtb_addr;
     map_file(&ram_loc, attr->data.system.dtb);
@@ -419,6 +422,7 @@ riscv_t *rv_create(riscv_user_t rv_attr)
      * prevent kernel from overwritting it
      */
     if (attr->data.system.initrd) {
+    printf("map_file3\n");
         uint32_t initrd_addr = dtb_addr - (8 * 1024 * 1024);
         ram_loc = ((char *) attr->mem->mem_base) + initrd_addr;
         map_file(&ram_loc, attr->data.system.initrd);
@@ -427,6 +431,7 @@ riscv_t *rv_create(riscv_user_t rv_attr)
     /* this variable has external linkage to mmu_io defined in system.c */
     extern riscv_io_t mmu_io;
     memcpy(&rv->io, &mmu_io, sizeof(riscv_io_t));
+    printf("map_file done\n");
 
     /* setup RISC-V hart */
     rv_set_reg(rv, rv_reg_a0, 0);
