@@ -110,7 +110,7 @@ static uint8_t u8250_handle_in(u8250_state_t *uart)
 
 #ifdef __EMSCRIPTEN__
         uart->in_ready = false;
-	return 0;
+	return ' '; /* prevent ugly output */
 #else
     if (read(uart->in_fd, &value, 1) < 0){
         fprintf(stderr, "failed to read UART input: %s\n", strerror(errno));
