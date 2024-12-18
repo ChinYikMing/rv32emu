@@ -162,10 +162,10 @@ static submission_t submission_pop(riscv_t *rv)
 {
     vm_attr_t *attr = PRIV(rv);
     submission_t submission;
-    memory_read(
-        attr->mem, (void *) &submission,
-        submission_queue.base + submission_queue.start * sizeof(submission_t),
-        sizeof(submission_t));
+    //memory_read(
+    //    attr->mem, (void *) &submission,
+    //    submission_queue.base + submission_queue.start * sizeof(submission_t),
+    //    sizeof(submission_t));
     ++submission_queue.start;
     submission_queue.start &= queues_capacity - 1;
     return submission;
@@ -181,9 +181,9 @@ static void event_push(riscv_t *rv, event_t event)
     event_queue.end &= queues_capacity - 1;
 
     uint32_t count;
-    memory_read(attr->mem, (void *) &count, event_count, sizeof(uint32_t));
+    //memory_read(attr->mem, (void *) &count, event_count, sizeof(uint32_t));
     count += 1;
-    memory_write(attr->mem, event_count, (void *) &count, sizeof(uint32_t));
+    //memory_write(attr->mem, event_count, (void *) &count, sizeof(uint32_t));
 }
 
 static inline uint32_t round_pow2(uint32_t x)
@@ -295,6 +295,17 @@ static bool check_sdl(riscv_t *rv, int width, int height)
     return true;
 }
 
+extern uint32_t *mmu_walk(riscv_t *rv, const uint32_t addr, uint32_t *level);
+#define get_ppn_and_offset()                                  \
+    uint32_t ppn;                                             \
+    uint32_t offset;                                          \
+    do {                                                      \
+        assert(pte);                                          \
+        ppn = *pte >> (RV_PG_SHIFT - 2) << RV_PG_SHIFT;       \
+        offset = level == 1 ? screen & MASK((RV_PG_SHIFT + 10)) \
+                            : screen & MASK(RV_PG_SHIFT);       \
+    } while (0)
+
 void syscall_draw_frame(riscv_t *rv)
 {
     vm_attr_t *attr = PRIV(rv);
@@ -312,7 +323,26 @@ void syscall_draw_frame(riscv_t *rv)
     void *pixels_ptr;
     if (SDL_LockTexture(texture, NULL, &pixels_ptr, &pitch))
         exit(-1);
-    memory_read(attr->mem, pixels_ptr, screen, width * height * 4);
+    //memcpy(dst, mem->mem_base + addr, size);
+    uint32_t tmp = width * height * 4;
+    uint32_t offset = 0;
+    //while(tmp >= 4){
+    //        int level;
+    //        //uint32_t val = rv->io.mem_read_w(rv, screen + offset);
+    //        //memory_read(0, pixels_ptr + offset, &val, 4);
+    //        pte_t *pte = mmu_walk(rv, screen + offset, &level);
+    //        assert(pte);
+    //        get_ppn_and_offset();
+    //        printf("123\n");
+    //        //const uint32_t addr = ppn | offset;
+    //        //printf("screen: %x, addr: %x\n", screen, addr);
+    //        //printf("pte is found\n");
+    //        //memory_read(attr->mem, pixels_ptr, addr, width * height * 4);
+    //        offset += 4;
+    //        //memory_read(attr->mem, pixels_ptr, screen, width * height * 4);
+    //        tmp -= 4;
+    //}
+    //memory_read(attr->mem, pixels_ptr, screen, width * height * 4);
     SDL_UnlockTexture(texture);
 
     int actual_width, actual_height;
@@ -325,50 +355,51 @@ void syscall_draw_frame(riscv_t *rv)
 void syscall_setup_queue(riscv_t *rv)
 {
     /* setup_queue(base, capacity, event_count) */
-    uint32_t base = rv_get_reg(rv, rv_reg_a0);
-    queues_capacity = rv_get_reg(rv, rv_reg_a1);
-    event_count = rv_get_reg(rv, rv_reg_a2);
+    //uint32_t base = rv_get_reg(rv, rv_reg_a0);
+    //queues_capacity = rv_get_reg(rv, rv_reg_a1);
+    //event_count = rv_get_reg(rv, rv_reg_a2);
 
-    event_queue.base = base;
-    submission_queue.base = base + sizeof(event_t) * queues_capacity;
-    queues_capacity = round_pow2(queues_capacity);
+    //event_queue.base = base;
+    //submission_queue.base = base + sizeof(event_t) * queues_capacity;
+    //queues_capacity = round_pow2(queues_capacity);
 }
 
 void syscall_submit_queue(riscv_t *rv)
 {
     /* submit_queue(count) */
-    uint32_t count = rv_get_reg(rv, rv_reg_a0);
+    //uint32_t count = rv_get_reg(rv, rv_reg_a0);
 
-    if (!window) {
-        deferred_submissions += count;
-        return;
-    }
+    //if (!window) {
+    //    deferred_submissions += count;
+    //    return;
+    //}
 
-    if (deferred_submissions)
-        count = deferred_submissions;
+    //if (deferred_submissions)
+    //    count = deferred_submissions;
 
-    while (count--) {
-        submission_t submission = submission_pop(rv);
+    //while (count--) {
+    //    submission_t submission = submission_pop(rv);
 
-        char *title;
-        switch (submission.type) {
-        case RELATIVE_MODE_SUBMISSION:
-            SDL_SetRelativeMouseMode(submission.mouse.enabled);
-            break;
-        case WINDOW_TITLE_SUBMISSION:
-            title = malloc(submission.title.size + 1);
-            if (unlikely(!title))
-                return;
+    //    char *title;
+    //    switch (submission.type) {
+    //    case RELATIVE_MODE_SUBMISSION:
+    //        SDL_SetRelativeMouseMode(submission.mouse.enabled);
+    //        break;
+    //    case WINDOW_TITLE_SUBMISSION:
+    //        title = malloc(submission.title.size + 1);
+    //        if (unlikely(!title))
+    //            return;
 
-            memory_read(PRIV(rv)->mem, (uint8_t *) title,
-                        submission.title.title, submission.title.size);
-            title[submission.title.size] = 0;
+    //        strcpy(title, "rv32emu");
+    //        //memory_read(PRIV(rv)->mem, (uint8_t *) title,
+    //        //            submission.title.title, submission.title.size);
+    //        //title[submission.title.size] = 0;
 
-            SDL_SetWindowTitle(window, title);
-            free(title);
-            break;
-        }
-    }
+    //        SDL_SetWindowTitle(window, title);
+    //        free(title);
+    //        break;
+    //    }
+    //}
 }
 
 /* Portions Copyright (C) 2021-2022 Steve Clark

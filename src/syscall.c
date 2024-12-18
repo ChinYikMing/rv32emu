@@ -445,22 +445,6 @@ static void syscall_sbi_base(riscv_t *rv)
 
 static void syscall_sbi_rst(riscv_t *rv)
 {
-    const riscv_word_t fid = rv_get_reg(rv, rv_reg_a6);
-    const riscv_word_t a0 = rv_get_reg(rv, rv_reg_a0);
-    const riscv_word_t a1 = rv_get_reg(rv, rv_reg_a1);
-
-    switch (fid) {
-    case SBI_RST_SYSTEM_RESET:
-        fprintf(stderr, "system reset: type=%u, reason=%u\n", a0, a1);
-        rv_halt(rv);
-        rv_set_reg(rv, rv_reg_a0, SBI_SUCCESS);
-        rv_set_reg(rv, rv_reg_a1, 0);
-        break;
-    default:
-        rv_set_reg(rv, rv_reg_a0, SBI_ERR_NOT_SUPPORTED);
-        rv_set_reg(rv, rv_reg_a1, 0);
-        break;
-    }
 }
 #endif /* SYSTEM */
 

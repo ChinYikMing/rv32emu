@@ -123,7 +123,7 @@ static bool ppn_is_valid(riscv_t *rv, uint32_t ppn)
  * @level: the level of which the PTE is located
  * @return: NULL if a not found or fault else the corresponding PTE
  */
-static uint32_t *mmu_walk(riscv_t *rv, const uint32_t addr, uint32_t *level)
+uint32_t *mmu_walk(riscv_t *rv, const uint32_t addr, uint32_t *level)
 {
     vm_attr_t *attr = PRIV(rv);
     uint32_t ppn = rv->csr_satp & MASK(22);
