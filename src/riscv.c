@@ -236,8 +236,10 @@ static void map_file(char **ram_loc, const char *name)
     /* remap to a memory region */
     *ram_loc = mmap(*ram_loc, st.st_size, PROT_READ | PROT_WRITE,
                     MAP_FIXED | MAP_PRIVATE, fd, 0);
-    if (*ram_loc == MAP_FAILED)
+    if (*ram_loc == MAP_FAILED){
+    	printf("here, size: %x, name: %s\n", st.st_size, name);
         goto cleanup;
+    }
 #else
     /* calloc and load data to a memory region */
     *ram_loc = calloc(st.st_size, sizeof(uint8_t));
@@ -419,7 +421,7 @@ riscv_t *rv_create(riscv_user_t rv_attr)
      * prevent kernel from overwritting it
      */
     if (attr->data.system.initrd) {
-        uint32_t initrd_addr = dtb_addr - (8 * 1024 * 1024);
+        uint32_t initrd_addr = dtb_addr - (16 * 1024 * 1024);
         ram_loc = ((char *) attr->mem->mem_base) + initrd_addr;
         map_file(&ram_loc, attr->data.system.initrd);
     }
