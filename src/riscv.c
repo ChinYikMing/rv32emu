@@ -532,7 +532,7 @@ void rv_run(riscv_t *rv)
            attr->data.user.elf_program
 #endif
     );
-    attr->cycle_per_step = 100000000;
+    attr->cycle_per_step = CYCLE_PER_STEP;
 
     if (!(attr->run_flag & (RV_RUN_TRACE | RV_RUN_GDBSTUB))) {
 #ifdef __EMSCRIPTEN__

@@ -11,7 +11,7 @@ WEB_FILES := $(BIN).js \
              $(OUT)/elf_list.js
 
 ifeq ("$(CC_IS_EMCC)", "1")
-BIN := $(BIN).js
+BIN := $(BIN).mjs
 
 # TCO
 CFLAGS += -mtail-call
@@ -26,18 +26,16 @@ endif
 # More build flags
 CFLAGS_emcc += -sINITIAL_MEMORY=2GB \
 	       -sALLOW_MEMORY_GROWTH \
-	       -s"EXPORTED_FUNCTIONS=$(EXPORTED_FUNCS)" \
 	       -sSTACK_SIZE=4MB \
-	       -sPTHREAD_POOL_SIZE=navigator.hardwareConcurrency \
+               -sPROXY_TO_PTHREAD \
+               --js-library=node_modules/xterm-pty/emscripten-pty.js \
+               -sPTHREAD_POOL_SIZE=navigator.hardwareConcurrency \
 	       --embed-file build/linux-image/Image@/Image \
 	       --embed-file build/linux-image/rootfs.cpio@/rootfs.cpio \
 	       --embed-file build/minimal.dtb@/minimal.dtb \
-	       --embed-file build/riscv32@/riscv32 \
-	       --embed-file build/timidity@/etc/timidity \
 	       -DMEM_SIZE=0x40000000 \
 	       -DCYCLE_PER_STEP=2000000 \
-	       --pre-js $(WEB_JS_RESOURCES)/pre.js \
-	       -O3 \
+               --pre-js $(WEB_JS_RESOURCES)/pre.js \
 	       -w
 
 $(OUT)/elf_list.js: tools/gen-elf-list-js.py
@@ -105,7 +103,6 @@ STATIC_WEB_FILES := $(WEB_HTML_RESOURCES)/index.html \
 		    $(WEB_JS_RESOURCES)/coi-serviceworker.min.js
 
 start-web: check-demo-dir-exist $(BIN)
-	$(foreach T, $(WEB_FILES), $(call cp-web-file, $(T)))
 	$(foreach T, $(STATIC_WEB_FILES), $(call cp-web-file, $(T)))
 	$(Q)python3 -m http.server --bind $(DEMO_IP) $(DEMO_PORT) --directory $(DEMO_DIR)
 endif
