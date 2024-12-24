@@ -37,6 +37,18 @@
 /* Max size of sound is around 18000 bytes */
 #define SFX_SAMPLE_SIZE 32768
 
+extern uint32_t *mmu_walk(riscv_t *rv, const uint32_t addr, uint32_t *level);
+#define get_ppn_and_offset(adr)                                  \
+    uint32_t ppn;                                             \
+    uint32_t offset;                                          \
+    do {                                                      \
+        assert(pte);                                          \
+        ppn = *pte >> (RV_PG_SHIFT - 2) << RV_PG_SHIFT;       \
+        offset = level == 1 ? adr & MASK((RV_PG_SHIFT + 10)) \
+                            : adr & MASK(RV_PG_SHIFT);       \
+    } while (0)
+
+
 /* sound-related request type */
 enum {
     INIT_AUDIO,
@@ -162,10 +174,10 @@ static submission_t submission_pop(riscv_t *rv)
 {
     vm_attr_t *attr = PRIV(rv);
     submission_t submission;
-    //memory_read(
-    //    attr->mem, (void *) &submission,
-    //    submission_queue.base + submission_queue.start * sizeof(submission_t),
-    //    sizeof(submission_t));
+    memory_read(
+        attr->mem, (void *) &submission,
+        submission_queue.base + submission_queue.start * sizeof(submission_t),
+        sizeof(submission_t));
     ++submission_queue.start;
     submission_queue.start &= queues_capacity - 1;
     return submission;
@@ -181,9 +193,15 @@ static void event_push(riscv_t *rv, event_t event)
     event_queue.end &= queues_capacity - 1;
 
     uint32_t count;
-    //memory_read(attr->mem, (void *) &count, event_count, sizeof(uint32_t));
+    int level;
+    pte_t *pte = mmu_walk(rv, event_count, &level);
+    assert(pte);
+    get_ppn_and_offset(event_count);
+    const uint32_t addr = ppn | offset;
+
+    memory_read(attr->mem, (void *) &count, addr, sizeof(uint32_t));
     count += 1;
-    //memory_write(attr->mem, event_count, (void *) &count, sizeof(uint32_t));
+    memory_write(attr->mem, addr, (void *) &count, sizeof(uint32_t));
 }
 
 static inline uint32_t round_pow2(uint32_t x)
@@ -295,16 +313,7 @@ static bool check_sdl(riscv_t *rv, int width, int height)
     return true;
 }
 
-extern uint32_t *mmu_walk(riscv_t *rv, const uint32_t addr, uint32_t *level);
-#define get_ppn_and_offset()                                  \
-    uint32_t ppn;                                             \
-    uint32_t offset;                                          \
-    do {                                                      \
-        assert(pte);                                          \
-        ppn = *pte >> (RV_PG_SHIFT - 2) << RV_PG_SHIFT;       \
-        offset = level == 1 ? screen & MASK((RV_PG_SHIFT + 10)) \
-                            : screen & MASK(RV_PG_SHIFT);       \
-    } while (0)
+static uint32_t tmp_buf[230400];
 
 void syscall_draw_frame(riscv_t *rv)
 {
@@ -314,35 +323,46 @@ void syscall_draw_frame(riscv_t *rv)
     const uint32_t screen = rv_get_reg(rv, rv_reg_a0);
     const int width = rv_get_reg(rv, rv_reg_a1);
     const int height = rv_get_reg(rv, rv_reg_a2);
+    const int is_init = rv_get_reg(rv, rv_reg_a3);
+    const int i = rv_get_reg(rv, rv_reg_a4);
 
     if (!check_sdl(rv, width, height))
         return;
 
     /* read directly into video memory */
+    int level;
+    pte_t *pte = mmu_walk(rv, screen, &level);
+    if(!pte){
+	printf("rewalk\n");
+	SET_CAUSE_AND_TVAL_THEN_TRAP(rv, 13, screen);
+
+        pte = mmu_walk(rv, screen, &level);
+    }
+    get_ppn_and_offset(screen);
+    const uint32_t addr = ppn | offset;
+
+    assert(addr >= (uint32_t)attr->mem->mem_base &&
+	addr <= ((uint32_t)attr->mem->mem_base + attr->mem->mem_size));
+
+    if(is_init){
+	memset(tmp_buf, 0, sizeof(uint32_t[230400]));
+	return;
+    }
+
+    uint8_t *ptr = (uint8_t *) &tmp_buf[0];
+    if(!is_init){
+	ptr += (i * 4096);
+	memcpy(ptr, attr->mem->mem_base + addr, 4096);
+    }
+
+    if(i < 224)
+	    return;
+
     int pitch = 0;
     void *pixels_ptr;
     if (SDL_LockTexture(texture, NULL, &pixels_ptr, &pitch))
         exit(-1);
-    //memcpy(dst, mem->mem_base + addr, size);
-    uint32_t tmp = width * height * 4;
-    uint32_t offset = 0;
-    //while(tmp >= 4){
-    //        int level;
-    //        //uint32_t val = rv->io.mem_read_w(rv, screen + offset);
-    //        //memory_read(0, pixels_ptr + offset, &val, 4);
-    //        pte_t *pte = mmu_walk(rv, screen + offset, &level);
-    //        assert(pte);
-    //        get_ppn_and_offset();
-    //        printf("123\n");
-    //        //const uint32_t addr = ppn | offset;
-    //        //printf("screen: %x, addr: %x\n", screen, addr);
-    //        //printf("pte is found\n");
-    //        //memory_read(attr->mem, pixels_ptr, addr, width * height * 4);
-    //        offset += 4;
-    //        //memory_read(attr->mem, pixels_ptr, screen, width * height * 4);
-    //        tmp -= 4;
-    //}
-    //memory_read(attr->mem, pixels_ptr, screen, width * height * 4);
+    memcpy(pixels_ptr, tmp_buf, sizeof(tmp_buf));
     SDL_UnlockTexture(texture);
 
     int actual_width, actual_height;
@@ -355,51 +375,57 @@ void syscall_draw_frame(riscv_t *rv)
 void syscall_setup_queue(riscv_t *rv)
 {
     /* setup_queue(base, capacity, event_count) */
-    //uint32_t base = rv_get_reg(rv, rv_reg_a0);
-    //queues_capacity = rv_get_reg(rv, rv_reg_a1);
-    //event_count = rv_get_reg(rv, rv_reg_a2);
+    uint32_t base = rv_get_reg(rv, rv_reg_a0); // this base is virtual
+    queues_capacity = rv_get_reg(rv, rv_reg_a1);
+    event_count = rv_get_reg(rv, rv_reg_a2); // this event_count is virtual
 
-    //event_queue.base = base;
-    //submission_queue.base = base + sizeof(event_t) * queues_capacity;
-    //queues_capacity = round_pow2(queues_capacity);
+    int level;
+    pte_t *pte = mmu_walk(rv, base, &level);
+    assert(pte);
+    get_ppn_and_offset(base);
+    const uint32_t addr = ppn | offset;
+
+    event_queue.base = addr;
+    submission_queue.base = addr + sizeof(event_t) * queues_capacity;
+    queues_capacity = round_pow2(queues_capacity);
 }
 
 void syscall_submit_queue(riscv_t *rv)
 {
     /* submit_queue(count) */
-    //uint32_t count = rv_get_reg(rv, rv_reg_a0);
+    uint32_t count = rv_get_reg(rv, rv_reg_a0);
 
-    //if (!window) {
-    //    deferred_submissions += count;
-    //    return;
-    //}
+    if (!window) {
+        deferred_submissions += count;
+        return;
+    }
 
-    //if (deferred_submissions)
-    //    count = deferred_submissions;
+    if (deferred_submissions)
+        count = deferred_submissions;
 
-    //while (count--) {
-    //    submission_t submission = submission_pop(rv);
+    while (count--) {
+        submission_t submission = submission_pop(rv);
 
-    //    char *title;
-    //    switch (submission.type) {
-    //    case RELATIVE_MODE_SUBMISSION:
-    //        SDL_SetRelativeMouseMode(submission.mouse.enabled);
-    //        break;
-    //    case WINDOW_TITLE_SUBMISSION:
-    //        title = malloc(submission.title.size + 1);
-    //        if (unlikely(!title))
-    //            return;
+        char *title;
+        switch (submission.type) {
+        case RELATIVE_MODE_SUBMISSION:
+            SDL_SetRelativeMouseMode(submission.mouse.enabled);
+            break;
+        case WINDOW_TITLE_SUBMISSION:
+            title = malloc(submission.title.size + 1);
+            if (unlikely(!title))
+                return;
 
-    //        strcpy(title, "rv32emu");
-    //        //memory_read(PRIV(rv)->mem, (uint8_t *) title,
-    //        //            submission.title.title, submission.title.size);
-    //        //title[submission.title.size] = 0;
+	    strcpy(title, "rv32emu");
+            memory_read(PRIV(rv)->mem, (uint8_t *) title,
+                        submission.title.title, submission.title.size);
+            title[submission.title.size] = 0;
 
-    //        SDL_SetWindowTitle(window, title);
-    //        free(title);
-    //        break;
-    //    }
-    //}
+            SDL_SetWindowTitle(window, title);
+            free(title);
+            break;
+        }
+    }
 }
 
 /* Portions Copyright (C) 2021-2022 Steve Clark
@@ -749,8 +775,14 @@ static void play_sfx(riscv_t *rv)
     int volume = rv_get_reg(rv, rv_reg_a2);
 
     sfxinfo_t sfxinfo;
-    memory_read(attr->mem, (uint8_t *) &sfxinfo, sfxinfo_addr,
-                sizeof(sfxinfo_t));
+    int level;
+    pte_t *pte = mmu_walk(rv, event_count, &level);
+    assert(pte);
+    get_ppn_and_offset(event_count);
+    const uint32_t addr = ppn | offset;
+
+    //memory_read(attr->mem, (uint8_t *) &sfxinfo, addr,
+    //            sizeof(sfxinfo_t));
 
     /* The data and size in the application must be positioned in the first two
      * fields of the structure. This ensures emulator compatibility with
@@ -759,8 +791,8 @@ static void play_sfx(riscv_t *rv)
     uint32_t sfx_data_offset = *((uint32_t *) &sfxinfo);
     uint32_t sfx_data_size = *(uint32_t *) ((uint32_t *) &sfxinfo + 1);
     uint8_t sfx_data[SFX_SAMPLE_SIZE];
-    memory_read(attr->mem, sfx_data, sfx_data_offset,
-                sizeof(uint8_t) * sfx_data_size);
+    //memory_read(attr->mem, sfx_data, sfx_data_offset,
+    //            sizeof(uint8_t) * sfx_data_size);
 
     sound_t sfx = {
         .data = sfx_data,
@@ -785,8 +817,8 @@ static void play_music(riscv_t *rv)
     int looping = rv_get_reg(rv, rv_reg_a3);
 
     musicinfo_t musicinfo;
-    memory_read(attr->mem, (uint8_t *) &musicinfo, musicinfo_addr,
-                sizeof(musicinfo_t));
+    //memory_read(attr->mem, (uint8_t *) &musicinfo, musicinfo_addr,
+    //            sizeof(musicinfo_t));
 
     /* The data and size in the application must be positioned in the first two
      * fields of the structure. This ensures emulator compatibility with
@@ -795,7 +827,7 @@ static void play_music(riscv_t *rv)
     uint32_t music_data_offset = *((uint32_t *) &musicinfo);
     uint32_t music_data_size = *(uint32_t *) ((uint32_t *) &musicinfo + 1);
     uint8_t music_data[MUSIC_MAX_SIZE];
-    memory_read(attr->mem, music_data, music_data_offset, music_data_size);
+    //memory_read(attr->mem, music_data, music_data_offset, music_data_size);
 
     sound_t music = {
         .data = music_data,
