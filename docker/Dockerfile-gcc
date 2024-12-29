@@ -1,0 +1,22 @@
+# we align the version used in riscv-toolchain-install.sh
+
+FROM ubuntu:24.04 as base
+
+# for x86-64, we can optimize this part and take the upstream (nightly) build directly
+# for aarch64, we need to build from scratch because the upstream toolchain is only built for x86-64
+RUN apt-get update && \
+    apt install -y \
+    git && \
+    rm -rf /var/lib/apt/lists/*
+RUN git clone --recursive https://github.com/riscv/riscv-gnu-toolchain
+RUN cd riscv-gnu-toolchain && \
+    ./.github/setup-apt.sh && rm -rf /var/lib/apt/lists/* && \
+    git checkout tags/2024.04.12 && \
+    ./configure --prefix=/opt/riscv --with-arch=rv32gc --with-abi=ilp32d && \
+    make -j$(nproc) newlib && \
+    make clean
+
+FROM ubuntu:24.04 as final
+
+# Keep the GNU Toolchain files only
+COPY --from=base /opt/riscv/ /opt/riscv/

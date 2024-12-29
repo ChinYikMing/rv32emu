@@ -1,0 +1,208 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  detect-code-related-file-changes:
+    runs-on: ubuntu-24.04
+    outputs:
+      has_code_related_changes: ${{ steps.set_has_code_related_changes.outputs.has_code_related_changes }}
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+      - name: Test changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v45
+        with:
+          files: |
+              .ci/**
+              build/**
+              mk/**
+              src/**
+              tests/**
+              tools/**
+              .clang-format
+              Dockerfile
+              Makefile
+      - name: Set has_code_related_changes
+        id: set_has_code_related_changes
+        run: |
+          if [[ ${{ steps.changed-files.outputs.any_changed }} == true ]]; then
+            echo "has_code_related_changes=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_code_related_changes=false" >> $GITHUB_OUTPUT
+          fi
+
+  host-x64:
+    needs: [detect-code-related-file-changes]
+    if: needs.detect-code-related-file-changes.outputs.has_code_related_changes == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v4
+    - name: install-dependencies
+      run: |
+            sudo apt-get update -q -y
+            sudo apt-get install -q -y libsdl2-dev libsdl2-mixer-dev device-tree-compiler expect
+            .ci/riscv-toolchain-install.sh
+            echo "${{ github.workspace }}/toolchain/bin" >> $GITHUB_PATH
+            wget https://apt.llvm.org/llvm.sh
+            sudo chmod +x ./llvm.sh
+            sudo ./llvm.sh 18
+      shell: bash
+    - name: default build
+      run: make -j$(nproc)
+    - name: check + tests
+      run: |
+            make check -j$(nproc)
+            make tests -j$(nproc)
+            make misalign -j$(nproc)
+            make tool -j$(nproc)
+    - name: diverse configurations
+      run: |
+            make distclean && make ENABLE_EXT_M=0 check -j$(nproc)
+            make distclean && make ENABLE_EXT_A=0 check -j$(nproc)
+            make distclean && make ENABLE_EXT_F=0 check -j$(nproc)
+            make distclean && make ENABLE_EXT_C=0 check -j$(nproc)
+            make distclean && make ENABLE_SDL=0 check -j$(nproc)
+    - name: misalignment test in block emulation
+      run: |
+            make -C tests/system/alignment/
+            make distclean && make ENABLE_ELF_LOADER=1 ENABLE_EXT_C=0 ENABLE_SYSTEM=1 misalign-in-blk-emu -j$(nproc)
+    - name: MMU test
+      run: |
+            make -C tests/system/mmu/
+            make distclean && make ENABLE_ELF_LOADER=1 ENABLE_SYSTEM=1 mmu-test -j$(nproc)
+    - name: gdbstub test
+      run: |
+            make distclean && make ENABLE_GDBSTUB=1 gdbstub-test -j$(nproc)
+    - name: JIT test
+      run: |
+            make ENABLE_JIT=1 clean && make ENABLE_JIT=1 check -j$(nproc)
+            make ENABLE_JIT=1 clean && make ENABLE_EXT_A=0 ENABLE_JIT=1 check -j$(nproc)
+            make ENABLE_JIT=1 clean && make ENABLE_EXT_F=0 ENABLE_JIT=1 check -j$(nproc)
+            make ENABLE_JIT=1 clean && make ENABLE_EXT_C=0 ENABLE_JIT=1 check -j$(nproc)
+    - name: undefined behavior test
+      run: |
+            make clean && make ENABLE_UBSAN=1 check -j$(nproc)
+            make ENABLE_JIT=1 clean && make ENABLE_JIT=1 ENABLE_UBSAN=1 check -j$(nproc)
+    - name: boot Linux kernel test
+      run: |
+            make clean && make ENABLE_SYSTEM=1 && make ENABLE_SYSTEM=1 artifact -j$(nproc)
+            .ci/boot-linux.sh
+            make ENABLE_SYSTEM=1 clean
+
+  host-arm64:
+    needs: [detect-code-related-file-changes]
+    if: needs.detect-code-related-file-changes.outputs.has_code_related_changes == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+    - name: checkout code
+      uses: actions/checkout@v4
+    - name: build artifact
+      # The GitHub Action for non-x86 CPU
+      # https://github.com/uraimo/run-on-arch-action
+      uses: uraimo/run-on-arch-action@v2
+      with:
+        arch: none
+        distro: none
+        base_image: "--platform=linux/arm64 arm64v8/ubuntu:22.04"
+        # No 'sudo' is available
+        install: |
+          apt-get update -q -y
+          apt-get install -q -y git build-essential libsdl2-dev libsdl2-mixer-dev lsb-release wget software-properties-common gnupg
+          git config --global --add safe.directory ${{ github.workspace }}
+          git config --global --add safe.directory ${{ github.workspace }}/src/softfloat
+          git config --global --add safe.directory ${{ github.workspace }}/src/mini-gdbstub
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x ./llvm.sh
+          ./llvm.sh 18
+        # Append custom commands here
+        run: |
+          make -j$(nproc)
+          make check -j$(nproc)
+          make ENABLE_JIT=1 clean && make ENABLE_JIT=1 check -j$(nproc)
+          make ENABLE_JIT=1 clean && make ENABLE_EXT_A=0 ENABLE_JIT=1 check -j$(nproc)
+          make ENABLE_JIT=1 clean && make ENABLE_EXT_F=0 ENABLE_JIT=1 check -j$(nproc)
+          make ENABLE_JIT=1 clean && make ENABLE_EXT_C=0 ENABLE_JIT=1 check -j$(nproc)
+
+  coding-style:
+    needs: [detect-code-related-file-changes]
+    if: needs.detect-code-related-file-changes.outputs.has_code_related_changes == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v4
+    - name: coding convention
+      run: |
+            sudo apt-get install -q -y clang-format-18
+            .ci/check-newline.sh
+            .ci/check-format.sh
+      shell: bash
+
+  static-analysis:
+    needs: [detect-code-related-file-changes]
+    if: needs.detect-code-related-file-changes.outputs.has_code_related_changes == 'true'
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    # LLVM static analysis
+    - name: set up scan-build
+      run: |
+            sudo apt-get update -q -y
+            sudo apt-get install -q -y libsdl2-dev libsdl2-mixer-dev
+            wget https://apt.llvm.org/llvm.sh
+            chmod +x ./llvm.sh
+            sudo ./llvm.sh 18
+            sudo apt-get install -q -y clang-18 clang-tools-18
+      shell: bash
+    - name: run scan-build without JIT
+      run: make distclean && scan-build-18 -v -o ~/scan-build --status-bugs --use-cc=clang-18 --force-analyze-debug-code --show-description -analyzer-config stable-report-filename=true -enable-checker valist,nullability make ENABLE_EXT_F=0 ENABLE_SDL=0 ENABLE_JIT=0
+    - name: run scan-build with JIT
+      run: |
+          make ENABLE_JIT=1 distclean && scan-build-18 -v -o ~/scan-build --status-bugs --use-cc=clang-18 --force-analyze-debug-code --show-description -analyzer-config stable-report-filename=true -enable-checker valist,nullability make ENABLE_EXT_F=0 ENABLE_SDL=0 ENABLE_JIT=1
+
+  compliance-test:
+    needs: [detect-code-related-file-changes]
+    if: needs.detect-code-related-file-changes.outputs.has_code_related_changes == 'true'
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: install-dependencies
+      run: |
+            .ci/riscv-toolchain-install.sh
+      shell: bash
+    - name: architectural test
+      run: |
+            .ci/riscv-tests.sh
+      shell: bash
+
+  # https://docs.docker.com/build/ci/github-actions/multi-platform/
+  docker-hub-build-and-publish:
+    needs: [detect-code-related-file-changes]
+    if: needs.detect-code-related-file-changes.outputs.has_code_related_changes == 'true'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        if: ${{ github.event_name == 'push'}}
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
+      - name: Get short commit SHA1
+        if: ${{ github.event_name == 'push'}}
+        shell: bash
+        run: |
+          echo "short_hash=$(git rev-parse --short "$GITHUB_SHA")" >> "$GITHUB_ENV"
+      - name: Build and push
+        if: ${{ github.event_name == 'push'}}
+        uses: docker/build-push-action@v6
+        with:
+          push: true
+          context: .
+          platforms: linux/amd64,linux/arm64/v8
+          tags: sysprog21/rv32emu:latest, sysprog21/rv32emu:${{ env.short_hash }}

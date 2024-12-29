@@ -1,0 +1,27 @@
+FROM ubuntu:24.04 as base
+
+# The upstream reference emulator is built for x86-64, and the releases are pretty out of date
+# Thus, we build it ourselves for both x86-64 and aarch64
+# 
+# The following dockerfile commands are modified from references [1][2]
+# Dependencies are pinned at certain versions. Within pinning, the build won't be reproducible
+# [1] https://riscof.readthedocs.io/en/stable/installation.html#install-plugin-models
+# [2] https://github.com/riscv/sail-riscv/blob/master/.github/workflows/compile.yml
+RUN apt-get update && \
+    apt install -y opam zlib1g-dev pkg-config libgmp-dev z3 device-tree-compiler && \
+    rm -rf /var/lib/apt/lists/*
+RUN opam init --disable-sandboxing -y
+RUN opam switch create ocaml-base-compiler.5.2.0 # opam switch list-available
+RUN opam search sail
+RUN opam install -y sail.0.17.1
+RUN git clone https://github.com/riscv/sail-riscv.git
+RUN cd sail-riscv && \
+    git checkout 0e9850fed5bee44346e583f334c6e2a6a25d5cd3 && \
+    eval $(opam env) && \
+    make && \
+    ARCH=RV32 make 
+
+FROM ubuntu:24.04 as final
+
+# keep the emulator only
+COPY --from=base /sail-riscv/c_emulator/riscv_sim_RV32 /home/root/riscv_sim_RV32
