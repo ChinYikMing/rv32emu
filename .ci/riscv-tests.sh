@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+source .ci/common.sh
+
 set -e -u -o pipefail
 
 # Install RISCOF
@@ -7,9 +9,7 @@ pip3 install git+https://github.com/riscv/riscof.git@d38859f85fe407bcacddd2efcd3
 
 set -x
 
-export PATH=`pwd`/toolchain/bin:$PATH
-
-PARALLEL=-j$(nproc)
+export PATH=$(pwd)/toolchain/bin:$PATH
 
 make distclean
 # Rebuild with all RISC-V extensions

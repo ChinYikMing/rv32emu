@@ -1,15 +1,12 @@
-# Expect host is Linux/x86_64
+# Expect host is Linux/x86_64, Linux/aarch64, macOS/arm64
+
+MACHINE_TYPE=$(uname -m)
+OS_TYPE=$(uname -s)
+
 check_platform()
 {
-    MACHINE_TYPE=`uname -m`
-    OS_TYPE=`uname -s`
-
     case "${MACHINE_TYPE}/${OS_TYPE}" in
-        x86_64/Linux | aarch64/Linux)
-            ;;
-        Arm64/Darwin)
-            echo "Apple Silicon is not supported yet"
-            exit 1
+        x86_64/Linux | aarch64/Linux | arm64/Darwin)
             ;;
         *)
             echo "Unsupported platform: ${MACHINE_TYPE}/${OS_TYPE}"
@@ -18,3 +15,9 @@ check_platform()
     esac
 
 }
+
+if [[ "${OS_TYPE}" == "Linux" ]]; then
+  PARALLEL=-j$(nproc)
+else
+  PARALLEL=-j$(sysctl -n hw.logicalcpu)
+fi
