@@ -1053,13 +1053,19 @@ void rv_step(void *arg)
         /* by now, a block should be available */
         assert(block);
 
-        /* After emulating the previous block, it is determined whether the
+#if !RV32_HAS(SYSTEM)
+        /* on exit */
+        if (unlikely(block->ir_head->pc == PRIV(rv)->exit_addr))
+            PRIV(rv)->on_exit = true;
+#endif
+
+#if RV32_HAS(BLOCK_CHAINING)
+        /*
+         * After emulating the previous block, it is determined whether the
          * branch is taken or not. The IR array of the current block is then
          * assigned to either the branch_taken or branch_untaken pointer of
          * the previous block.
          */
-
-#if RV32_HAS(BLOCK_CHAINING)
         if (prev) {
             rv_insn_t *last_ir = prev->ir_tail;
             /* chain block */
