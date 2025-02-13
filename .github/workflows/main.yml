@@ -231,8 +231,6 @@ jobs:
             make ENABLE_JIT=1 clean && make ENABLE_BLOCK_CHAINING=0 ENABLE_JIT=1 check -j$(nproc)
       if: ${{ always() }}
     - name: undefined behavior test
-      env:
-        CC: ${{ steps.install_cc.outputs.cc }}
       run: |
             make distclean && make ENABLE_UBSAN=1 check -j$(nproc)
             make ENABLE_JIT=1 clean && make ENABLE_JIT=1 ENABLE_UBSAN=1 check -j$(nproc)
