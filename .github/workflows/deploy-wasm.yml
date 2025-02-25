@@ -95,6 +95,6 @@ jobs:
             github.event_name == 'repository_dispatch' }}
         uses: ad-m/github-push-action@master
         with:
-          repository: sysprog21/rv32emu-demo
+          repository: ChinYikMing/rv32emu-demo
           github_token: ${{ secrets.RV32EMU_DEMO_TOKEN }}
           branch: main
