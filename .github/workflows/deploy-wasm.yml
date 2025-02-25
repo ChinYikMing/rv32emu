@@ -9,6 +9,8 @@ on:
   workflow_dispatch:
     branches:
       - master
+  repository_dispatch:   # listening to rv32emu-prebuilt events
+    types: [deploy_wasm]
 
 jobs:
   wasm-deploy:
@@ -22,12 +24,19 @@ jobs:
         uses: tj-actions/changed-files@v45
         with:
           files: |
-              assets/html/index.html
-              assets/js/pre.js
+              assets/wasm/html/index.html
+              assets/wasm/js/pre.js
               build/*.elf
+              # Files below may have a potential performance impact (reference from benchmark.yml)
+              src/riscv.c
+              src/decode.c
+              src/emulate.c
+              src/rv32_template.c
+              src/rv32_constopt.c
       - name: install emcc
         if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
-            github.event_name == 'workflow_dispatch'}}
+            github.event_name == 'workflow_dispatch' ||
+            github.event_name == 'repository_dispatch' }}
         run: |
             git clone https://github.com/emscripten-core/emsdk.git
             cd emsdk
@@ -40,12 +49,13 @@ jobs:
         shell: bash
       - name: build with emcc and move application files to /tmp
         if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
-            github.event_name == 'workflow_dispatch'}}
+            github.event_name == 'workflow_dispatch' ||
+            github.event_name == 'repository_dispatch' }}
         run: |
             make CC=emcc ENABLE_GDBSTUB=0 ENABLE_SDL=1
             mkdir /tmp/rv32emu-demo
-            mv assets/html/index.html /tmp/rv32emu-demo
-            mv assets/js/coi-serviceworker.min.js /tmp/rv32emu-demo
+            mv assets/wasm/html/index.html /tmp/rv32emu-demo
+            mv assets/wasm/js/coi-serviceworker.min.js /tmp/rv32emu-demo
             mv build/elf_list.js /tmp/rv32emu-demo
             mv build/rv32emu.js /tmp/rv32emu-demo
             mv build/rv32emu.wasm /tmp/rv32emu-demo
@@ -53,14 +63,16 @@ jobs:
             ls -al /tmp/rv32emu-demo
       - name: Check out the rv32emu-demo repo
         if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
-            github.event_name == 'workflow_dispatch'}}
+            github.event_name == 'workflow_dispatch' ||
+            github.event_name == 'repository_dispatch' }}
         uses: actions/checkout@v4
         with:
           persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
           repository: sysprog21/rv32emu-demo
       - name: Create local changes
         if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
-            github.event_name == 'workflow_dispatch'}}
+            github.event_name == 'workflow_dispatch' ||
+            github.event_name == 'repository_dispatch' }}
         run: |
             mv /tmp/rv32emu-demo/index.html .
             mv /tmp/rv32emu-demo/coi-serviceworker.min.js .
@@ -70,7 +82,8 @@ jobs:
             mv /tmp/rv32emu-demo/rv32emu.worker.js .
       - name: Commit files
         if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
-            github.event_name == 'workflow_dispatch'}}
+            github.event_name == 'workflow_dispatch' ||
+            github.event_name == 'repository_dispatch' }}
         run: |
             git config --local user.email "github-actions[bot]@users.noreply.github.com"
             git config --local user.name "github-actions[bot]"
@@ -78,7 +91,8 @@ jobs:
             git commit -m "Add changes"
       - name: Push changes
         if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
-            github.event_name == 'workflow_dispatch'}}
+            github.event_name == 'workflow_dispatch' ||
+            github.event_name == 'repository_dispatch' }}
         uses: ad-m/github-push-action@master
         with:
           repository: sysprog21/rv32emu-demo
