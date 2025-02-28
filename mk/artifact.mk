@@ -45,6 +45,7 @@ define fetch-releases-tag
         $(info $(call warnx, $(3) is found. Skipping downloading.)), \
         $(eval LATEST_RELEASE := $(shell wget -q https://api.github.com/repos/sysprog21/rv32emu-prebuilt/releases -O-))
         $(if $(LATEST_RELEASE),, \
+            $(warning $(LATEST_RELEASE)) \
             $(error Fetching tag of latest releases failed) \
         ) \
     )
