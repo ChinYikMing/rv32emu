@@ -43,8 +43,6 @@ jobs:
     runs-on: macos-latest # M1 chip
     steps:
      - uses: actions/checkout@v4
-       with:
-         token: ${{ secrets.RV32EMU_MACOS_TOKEN }}
      - name: install-dependencies
        run: |
              brew install make dtc expect sdl2 sdl2_mixer bc e2fsprogs p7zip llvm@18 dcfldd
@@ -63,7 +61,11 @@ jobs:
      - name: Set parallel jobs variable
        run: |
              echo "PARALLEL=-j$(sysctl -n hw.logicalcpu)" >> $GITHUB_ENV
-             wget https://api.github.com/repos/sysprog21/rv32emu-prebuilt/releases -O-
+             #wget https://api.github.com/repos/sysprog21/rv32emu-prebuilt/releases -O-
+             wget --header="Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+                  --output-document=- \
+                  "https://api.github.com/repos/sysprog21/rv32emu-prebuilt/releases"
+
 
   coding-style:
     needs: [detect-code-related-file-changes]
