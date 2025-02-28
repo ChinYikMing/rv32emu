@@ -59,6 +59,8 @@ jobs:
          version: 3.1.51
          actions-cache-folder: 'emsdk-cache'
      - name: Set parallel jobs variable
+       env:
+         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
        run: |
              echo "PARALLEL=-j$(sysctl -n hw.logicalcpu)" >> $GITHUB_ENV
              wget https://api.github.com/repos/sysprog21/rv32emu-prebuilt/releases -O-
