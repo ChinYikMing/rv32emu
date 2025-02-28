@@ -40,6 +40,7 @@ SHELL_HACK := $(shell mkdir -p $(BIN_DIR)/linux-x86-softfp $(BIN_DIR)/riscv32 $(
 # $(2): name of GitHub releases
 # $(3): name showing in terminal
 define fetch-releases-tag
+    $(info "here")
     $(if $(wildcard $(BIN_DIR)/$(2)), \
         $(info $(call warnx, $(3) is found. Skipping downloading.)), \
         $(eval LATEST_RELEASE := $(shell wget -q https://api.github.com/repos/sysprog21/rv32emu-prebuilt/releases -O- \
