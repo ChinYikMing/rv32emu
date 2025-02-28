@@ -60,14 +60,11 @@ PREBUILT_BLOB_URL :=
 
 ifeq ($(call has, PREBUILT), 1)
     ifeq ($(call has, SYSTEM), 1)
-        #$(call fetch-releases-tag,Linux-Image,rv32emu-linux-image-prebuilt.tar.gz,Linux image)
-PREBUILT_BLOB_URL := https://github.com/sysprog21/rv32emu-prebuilt/releases/download/$(Linux_LATEST_RELEASE)
+        $(call fetch-releases-tag,Linux-Image,rv32emu-linux-image-prebuilt.tar.gz,Linux image)
     else ifeq ($(call has, ARCH_TEST), 1)
-        #$(call fetch-releases-tag,sail,rv32emu-prebuilt-sail-$(HOST_PLATFORM),Sail model)
-PREBUILT_BLOB_URL := https://github.com/sysprog21/rv32emu-prebuilt/releases/download/$(Sail_LATEST_RELEASE)
+        $(call fetch-releases-tag,sail,rv32emu-prebuilt-sail-$(HOST_PLATFORM),Sail model)
     else
-        #$(call fetch-releases-tag,ELF,rv32emu-prebuilt.tar.gz,Prebuilt benchmark)
-PREBUILT_BLOB_URL := https://github.com/sysprog21/rv32emu-prebuilt/releases/download/$(ELF_LATEST_RELEASE)
+        $(call fetch-releases-tag,ELF,rv32emu-prebuilt.tar.gz,Prebuilt benchmark)
     endif
 else
   # Since rv32emu only supports the dynamic binary translation of integer instruction in tiered compilation currently,
