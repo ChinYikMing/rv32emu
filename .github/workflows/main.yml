@@ -1,6 +1,6 @@
 name: CI
 
-on: [push, pull_request]
+on: [workflow_dispatch, push, pull_request]
 
 jobs:
   detect-code-related-file-changes:
@@ -35,7 +35,6 @@ jobs:
 
   macOS-arm64:
     needs: [detect-code-related-file-changes]
-    if: needs.detect-code-related-file-changes.outputs.has_code_related_changes == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -43,25 +42,9 @@ jobs:
     runs-on: macos-latest # M1 chip
     steps:
      - uses: actions/checkout@v4
-     - name: install-dependencies
-       run: |
-             brew install make dtc expect sdl2 sdl2_mixer bc e2fsprogs p7zip llvm@18 dcfldd
-             .ci/riscv-toolchain-install.sh
-             echo "${{ github.workspace }}/toolchain/bin" >> $GITHUB_PATH
-     - name: Install compiler
-       id: install_cc
-       uses: rlalik/setup-cpp-compiler@master
-       with:
-         compiler: ${{ matrix.compiler }}
-     - name: Setup emsdk
-       uses: mymindstorm/setup-emsdk@v14
-       with:
-         version: 3.1.51
-         actions-cache-folder: 'emsdk-cache'
      - name: Set parallel jobs variable
        run: |
              echo "PARALLEL=-j$(sysctl -n hw.logicalcpu)" >> $GITHUB_ENV
-             #wget https://api.github.com/repos/sysprog21/rv32emu-prebuilt/releases -O-
              wget --header="Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
                   --output-document=- \
                   "https://api.github.com/repos/sysprog21/rv32emu-prebuilt/releases"
