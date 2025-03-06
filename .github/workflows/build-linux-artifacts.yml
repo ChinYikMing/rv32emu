@@ -15,31 +15,36 @@ jobs:
         with:
           submodules: 'true'
       - name: Test file change of Linux image
-        id: test-linux-image-version-change
+        id: test-change
         uses: tj-actions/changed-files@v45
         with:
           files: |
+            assets/system/configs/*
             mk/external.mk
       - name: Set alias
         id: has_changed_files
         run: |
-          if [[ ${{ steps.test-linux-image-version-change.outputs.any_modified }} == true ]]; then
+          if [[ ${{ steps.test-change.outputs.any_modified }} == true ]]; then
+            HAS_CHANGED=false
             # Determine if the changes are from Buildroot or the Linux version (The Linux might have several patches, so also need to check the SHA value)
             echo -n $(git --no-pager diff HEAD^ HEAD | grep -e "+BUILDROOT_VERSION" -e "+LINUX_VERSION" -e "+LINUX_PATCHLEVEL") >> linux-image-version-change
             if [[ -s linux-image-version-change ]]; then
-                echo "has_changed_linux_image_version=true" >> $GITHUB_OUTPUT
-            else
-                echo "has_changed_linux_image_version=false" >> $GITHUB_OUTPUT
+                HAS_CHANGED=true
             fi
+            # Determine if changed files contains substring "assets"
+            if [[ "${{ steps.test-change.outputs.all_changed_and_modified_files }}" =~ "assets" ]]; then
+                HAS_CHANGED=true
+            fi
+            echo "has_changed=$HAS_CHANGED" >> $GITHUB_OUTPUT
           else
-            echo "has_changed_linux_image_version=false" >> $GITHUB_OUTPUT
+            echo "has_changed=false" >> $GITHUB_OUTPUT
           fi
     outputs:
-      has_changed_linux_image_version: ${{ steps.has_changed_files.outputs.has_changed_linux_image_version }}
+      has_changed: ${{ steps.has_changed_files.outputs.has_changed }}
 
   build-linux-image-artifact:
     needs: [detect-file-change]
-    if: ${{ needs.detect-file-change.outputs.has_changed_linux_image_version == 'true' || github.event_name == 'workflow_dispatch' }}
+    if: ${{ needs.detect-file-change.outputs.has_changed == 'true' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-22.04
     steps:
       - name: Checkout repository
