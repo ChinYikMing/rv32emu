@@ -123,7 +123,7 @@ BUILDROOT_DATA_SHA_CMD = $(SHA1SUM)
 
 # Linux kernel
 LINUX_VERSION = 6
-LINUX_PATCHLEVEL = 1
+LINUX_PATCHLEVEL = 6
 LINUX_CDN_BASE_URL = https://cdn.kernel.org/pub/linux/kernel
 LINUX_CDN_VERSION_URL = $(LINUX_CDN_BASE_URL)/v$(LINUX_VERSION).x
 $(shell mkdir -p /tmp/linux)
