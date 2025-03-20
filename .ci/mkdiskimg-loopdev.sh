@@ -35,7 +35,7 @@ case "$ACTION" in
         # still require elevated privileges (e.g., setuid).
         # To simplify this, we change the ownership to a non-root user.
         # Use this with caution—changing ownership to runner:runner is specific to the GitHub CI environment.
-	chown runner:runner ${VBLK_IMG}
+	chown runner: ${VBLK_IMG}
 	# Add other's rw permission to the disk image and device, so non-superuser can rw the them
 	chmod o+r,o+w ${VBLK_IMG}
 	chmod o+r,o+w ${BLK_DEV}
