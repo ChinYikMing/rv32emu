@@ -82,10 +82,12 @@ jobs:
       run: |
             make distclean && make INITRD_SIZE=32 ENABLE_SYSTEM=1 $PARALLEL && make ENABLE_SYSTEM=1 artifact $PARALLEL
             TMP_FILE=$(mktemp)
+            ls -alh ${TMP_FILE}
             sudo env TMP_FILE=${TMP_FILE} .ci/mkdiskimg-loopdev.sh create
             cat ${TMP_FILE} >> "$GITHUB_ENV"
             .ci/boot-linux.sh
             sudo .ci/mkdiskimg-loopdev.sh delete
+            rm ${TMP_FILE}
             make ENABLE_SYSTEM=1 clean
       if: ${{ always() }}
     - name: boot Linux kernel test (JIT)
@@ -98,6 +100,7 @@ jobs:
             cat ${TMP_FILE} >> "$GITHUB_ENV"
             .ci/boot-linux.sh
             sudo .ci/mkdiskimg-loopdev.sh delete
+            rm ${TMP_FILE}
             make ENABLE_SYSTEM=1 ENABLE_JIT=1 ENABLE_T2C=0 ENABLE_MOP_FUSION=0 clean
       if: ${{ always() }}
 
@@ -172,6 +175,7 @@ jobs:
              cat ${TMP_FILE} >> "$GITHUB_ENV"
              .ci/boot-linux.sh
              sudo .ci/mkdiskimg-loopdev.sh delete
+             rm ${TMP_FILE}
              make ENABLE_SYSTEM=1 clean
        if: ${{ always() }}
 
