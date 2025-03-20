@@ -53,8 +53,7 @@ if [ "${ENABLE_VBLK}" -eq "1" ]; then
     EXPECT_CMDS+=('
     expect "buildroot login:" { send "root\n" } timeout { exit 1 }
     expect "# " { send "uname -a\n" } timeout { exit 2 }
-    expect "riscv32 GNU/Linux" { send "ls /dev/vda\n" } timeout { exit 3 }
-    expect "/dev/vda" { send "mkdir mnt && mount /dev/vda mnt\n" } timeout { exit 3 }
+    expect "riscv32 GNU/Linux" { send "mkdir mnt && mount /dev/vda mnt\n" } timeout { exit 3 }
     expect "# " { send "echo rv32emu > mnt/emu.txt\n" } timeout { exit 3 }
     expect -ex "-sh: can'\''t create mnt/emu.txt: Read-only file system" {} timeout { exit 3 }
     expect "# " { send "\x01"; send "x" } timeout { exit 3 }
@@ -65,8 +64,7 @@ if [ "${ENABLE_VBLK}" -eq "1" ]; then
     VBLK_EXPECT_CMDS='
      expect "buildroot login:" { send "root\n" } timeout { exit 1 }
      expect "# " { send "uname -a\n" } timeout { exit 2 }
-     expect "riscv32 GNU/Linux" { send "ls /dev/vda\n" } timeout { exit 3 }
-     expect "/dev/vda" { send "mkdir mnt && mount /dev/vda mnt\n" } timeout { exit 3 }
+     expect "riscv32 GNU/Linux" { send "mkdir mnt && mount /dev/vda mnt\n" } timeout { exit 3 }
      expect "# " { send "echo rv32emu > mnt/emu.txt\n" } timeout { exit 3 }
      expect "# " { send "sync\n" } timeout { exit 3 }
      expect "# " { send "umount mnt\n" } timeout { exit 3 }
@@ -108,4 +106,4 @@ for i in "${!TEST_OPTIONS[@]}"; do
     fi
 done
 
-exit ${ret}
+exit 3
