@@ -83,6 +83,10 @@ jobs:
             make distclean && make INITRD_SIZE=32 ENABLE_SYSTEM=1 $PARALLEL && make ENABLE_SYSTEM=1 artifact $PARALLEL
             TMP_FILE=$(mktemp)
             ls -alh ${TMP_FILE}
+            sudo chmod o+r,o+w ${TMP_FILE}
+            ls -alh ${TMP_FILE}
+            sudo chown runner ${TMP_FILE}
+            ls -alh ${TMP_FILE}
             sudo env TMP_FILE=${TMP_FILE} .ci/mkdiskimg-loopdev.sh create
             cat ${TMP_FILE} >> "$GITHUB_ENV"
             .ci/boot-linux.sh

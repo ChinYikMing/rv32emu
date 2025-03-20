@@ -41,7 +41,7 @@ case "$ACTION" in
         chmod o+r,o+w ${BLK_DEV}
 
         # Export ${BLK_DEV} to a tmp file. Then, export to "$GITHUB_ENV" in job step.
-        echo "BLK_DEV=${BLK_DEV}" | sudo tee "${TMP_FILE}"
+        echo "BLK_DEV=${BLK_DEV}" > "${TMP_FILE}"
         ;;
     delete)
         # Detach the /dev/loopx(Linux) or /dev/diskx(Darwin) to release system resources
