@@ -81,8 +81,7 @@ jobs:
         CC: ${{ steps.install_cc.outputs.cc }}
       run: |
             make distclean && make INITRD_SIZE=32 ENABLE_SYSTEM=1 $PARALLEL && make ENABLE_SYSTEM=1 artifact $PARALLEL
-            touch build/tmpfile
-            TMP_FILE=$(realpath "build/tmpfile")
+            TMP_FILE=$(mktemp)
             sudo env TMP_FILE=${TMP_FILE} .ci/mkdiskimg-loopdev.sh create
             . ${TMP_FILE}
             .ci/boot-linux.sh
@@ -95,8 +94,7 @@ jobs:
         CC: ${{ steps.install_cc.outputs.cc }}
       run: |
             make distclean && make INITRD_SIZE=32 ENABLE_SYSTEM=1 ENABLE_JIT=1 ENABLE_T2C=0 ENABLE_MOP_FUSION=0 $PARALLEL && make ENABLE_SYSTEM=1 artifact $PARALLEL
-            touch build/tmpfile
-            TMP_FILE=$(realpath "build/tmpfile")
+            TMP_FILE=$(mktemp)
             sudo env TMP_FILE=${TMP_FILE} .ci/mkdiskimg-loopdev.sh create
             . ${TMP_FILE}
             .ci/boot-linux.sh
@@ -173,7 +171,7 @@ jobs:
              make ENABLE_SYSTEM=1 artifact $PARALLEL
              TMP_FILE=$(mktemp)
              sudo env TMP_FILE=${TMP_FILE} .ci/mkdiskimg-loopdev.sh create
-             cat ${TMP_FILE} >> "$GITHUB_ENV"
+             . ${TMP_FILE}
              .ci/boot-linux.sh
              sudo .ci/mkdiskimg-loopdev.sh delete
              rm ${TMP_FILE}
