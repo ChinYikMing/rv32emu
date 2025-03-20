@@ -88,7 +88,7 @@ jobs:
       run: |
             make distclean && make INITRD_SIZE=32 ENABLE_SYSTEM=1 $PARALLEL && make ENABLE_SYSTEM=1 artifact $PARALLEL
             TMP_FILE=$(mktemp)
-            ${BOOT_LINUX_TEST}
+            bash -c "${BOOT_LINUX_TEST}"
             make ENABLE_SYSTEM=1 clean
       if: ${{ always() }}
     - name: boot Linux kernel test (JIT)
@@ -96,7 +96,7 @@ jobs:
         CC: ${{ steps.install_cc.outputs.cc }}
       run: |
             make distclean && make INITRD_SIZE=32 ENABLE_SYSTEM=1 ENABLE_JIT=1 ENABLE_T2C=0 ENABLE_MOP_FUSION=0 $PARALLEL && make ENABLE_SYSTEM=1 artifact $PARALLEL
-            ${BOOT_LINUX_TEST}
+            bash -c "${BOOT_LINUX_TEST}"
             make ENABLE_SYSTEM=1 ENABLE_JIT=1 ENABLE_T2C=0 ENABLE_MOP_FUSION=0 clean
       if: ${{ always() }}
 
@@ -172,7 +172,7 @@ jobs:
        run: |
              make distclean && make INITRD_SIZE=32 ENABLE_SYSTEM=1 $PARALLEL && \
              make ENABLE_SYSTEM=1 artifact $PARALLEL
-             ${BOOT_LINUX_TEST}
+             bash -c "${BOOT_LINUX_TEST}"
              make ENABLE_SYSTEM=1 clean
        if: ${{ always() }}
 
