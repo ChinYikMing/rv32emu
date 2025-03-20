@@ -60,7 +60,16 @@ jobs:
         compiler: ${{ matrix.compiler }}
     - name: Set parallel jobs variable
       run: |
-            echo "PARALLEL=-j$(nproc)" >> $GITHUB_ENV
+            echo "PARALLEL=-j$(nproc)" >> "$GITHUB_ENV"
+            echo "BOOT_LINUX_TEST=$(cat <<'EOF'
+touch build/tmpfile
+TMP_FILE=$(realpath "build/tmpfile")
+sudo env TMP_FILE=${TMP_FILE} .ci/mkdiskimg-loopdev.sh create
+. "${TMP_FILE}"
+.ci/boot-linux.sh
+sudo env TMP_FILE=${TMP_FILE} .ci/mkdiskimg-loopdev.sh delete
+EOF
+)" >> "$GITHUB_ENV"
     - name: fetch artifact first to reduce HTTP requests
       env:
         CC: ${{ steps.install_cc.outputs.cc }}
@@ -82,11 +91,7 @@ jobs:
       run: |
             make distclean && make INITRD_SIZE=32 ENABLE_SYSTEM=1 $PARALLEL && make ENABLE_SYSTEM=1 artifact $PARALLEL
             TMP_FILE=$(mktemp)
-            sudo env TMP_FILE=${TMP_FILE} .ci/mkdiskimg-loopdev.sh create
-            . ${TMP_FILE}
-            .ci/boot-linux.sh
-            sudo .ci/mkdiskimg-loopdev.sh delete
-            rm ${TMP_FILE}
+            ${BOOT_LINUX_TEST}
             make ENABLE_SYSTEM=1 clean
       if: ${{ always() }}
     - name: boot Linux kernel test (JIT)
@@ -94,12 +99,7 @@ jobs:
         CC: ${{ steps.install_cc.outputs.cc }}
       run: |
             make distclean && make INITRD_SIZE=32 ENABLE_SYSTEM=1 ENABLE_JIT=1 ENABLE_T2C=0 ENABLE_MOP_FUSION=0 $PARALLEL && make ENABLE_SYSTEM=1 artifact $PARALLEL
-            TMP_FILE=$(mktemp)
-            sudo env TMP_FILE=${TMP_FILE} .ci/mkdiskimg-loopdev.sh create
-            . ${TMP_FILE}
-            .ci/boot-linux.sh
-            sudo .ci/mkdiskimg-loopdev.sh delete
-            rm ${TMP_FILE}
+            ${BOOT_LINUX_TEST}
             make ENABLE_SYSTEM=1 ENABLE_JIT=1 ENABLE_T2C=0 ENABLE_MOP_FUSION=0 clean
       if: ${{ always() }}
 
@@ -126,7 +126,7 @@ jobs:
          compiler: ${{ matrix.compiler }}
      - name: Set parallel jobs variable
        run: |
-             echo "PARALLEL=-j$(sysctl -n hw.logicalcpu)" >> $GITHUB_ENV
+             echo "PARALLEL=-j$(sysctl -n hw.logicalcpu)" >> "$GITHUB_ENV"
      - name: Symlink gcc-14 due to the default /usr/local/bin/gcc links to system's clang
        run: |
              ln -s /opt/homebrew/opt/gcc/bin/gcc-14 /usr/local/bin/gcc-14
@@ -169,12 +169,7 @@ jobs:
        run: |
              make distclean && make INITRD_SIZE=32 ENABLE_SYSTEM=1 $PARALLEL && \
              make ENABLE_SYSTEM=1 artifact $PARALLEL
-             TMP_FILE=$(mktemp)
-             sudo env TMP_FILE=${TMP_FILE} .ci/mkdiskimg-loopdev.sh create
-             . ${TMP_FILE}
-             .ci/boot-linux.sh
-             sudo .ci/mkdiskimg-loopdev.sh delete
-             rm ${TMP_FILE}
+             ${BOOT_LINUX_TEST}
              make ENABLE_SYSTEM=1 clean
        if: ${{ always() }}
 

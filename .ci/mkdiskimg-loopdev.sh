@@ -56,6 +56,9 @@ case "$ACTION" in
 
         # delete disk image
         rm -f ${VBLK_IMG}
+
+        # delete tmp file that stores temporary /dev/ block device
+        rm "${TMP_FILE}"
         ;;
     *)
         printf "Usage: %s {create|delete}\n" "$0"
