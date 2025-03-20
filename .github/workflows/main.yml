@@ -86,7 +86,7 @@ jobs:
             sudo env TMP_FILE=${TMP_FILE} .ci/mkdiskimg-loopdev.sh create
             cat ${TMP_FILE}
             echo "$(cat ${TMP_FILE})" >> "$GITHUB_ENV"
-            .ci/boot-linux.sh
+            BLK_DEV=/dev/loop0 .ci/boot-linux.sh
             sudo .ci/mkdiskimg-loopdev.sh delete
             rm ${TMP_FILE}
             make ENABLE_SYSTEM=1 clean
