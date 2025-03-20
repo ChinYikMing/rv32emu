@@ -84,9 +84,8 @@ jobs:
             touch build/tmpfile
             TMP_FILE=$(realpath "build/tmpfile")
             sudo env TMP_FILE=${TMP_FILE} .ci/mkdiskimg-loopdev.sh create
-            cat ${TMP_FILE}
-            echo "$(cat ${TMP_FILE})" >> "$GITHUB_ENV"
-            BLK_DEV=/dev/loop0 .ci/boot-linux.sh
+            . ${TMP_FILE}
+            .ci/boot-linux.sh
             sudo .ci/mkdiskimg-loopdev.sh delete
             rm ${TMP_FILE}
             make ENABLE_SYSTEM=1 clean
@@ -96,9 +95,10 @@ jobs:
         CC: ${{ steps.install_cc.outputs.cc }}
       run: |
             make distclean && make INITRD_SIZE=32 ENABLE_SYSTEM=1 ENABLE_JIT=1 ENABLE_T2C=0 ENABLE_MOP_FUSION=0 $PARALLEL && make ENABLE_SYSTEM=1 artifact $PARALLEL
-            TMP_FILE=$(mktemp)
+            touch build/tmpfile
+            TMP_FILE=$(realpath "build/tmpfile")
             sudo env TMP_FILE=${TMP_FILE} .ci/mkdiskimg-loopdev.sh create
-            cat ${TMP_FILE} >> "$GITHUB_ENV"
+            . ${TMP_FILE}
             .ci/boot-linux.sh
             sudo .ci/mkdiskimg-loopdev.sh delete
             rm ${TMP_FILE}
