@@ -62,11 +62,10 @@ jobs:
       run: |
             echo "PARALLEL=-j$(nproc)" >> "$GITHUB_ENV"
             echo "BOOT_LINUX_TEST=touch build/tmpfile; \
-                                  TMP_FILE=$(realpath build/tmpfile); \
-                                  sudo env TMP_FILE=${TMP_FILE} .ci/mkdiskimg-loopdev.sh create; \
-                                  . ${TMP_FILE}; \
+                                  sudo env TMP_FILE=$(realpath build/tmpfile) .ci/mkdiskimg-loopdev.sh create; \
+                                  . $(realpath build/tmpfile); \
                                   .ci/boot-linux.sh; \
-                                  sudo env TMP_FILE=${TMP_FILE} .ci/mkdiskimg-loopdev.sh delete" >> "$GITHUB_ENV"
+                                  sudo env TMP_FILE=$(realpath build/tmpfile) .ci/mkdiskimg-loopdev.sh delete" >> "$GITHUB_ENV"
     - name: fetch artifact first to reduce HTTP requests
       env:
         CC: ${{ steps.install_cc.outputs.cc }}
