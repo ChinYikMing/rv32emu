@@ -61,20 +61,13 @@ jobs:
     - name: Set parallel jobs variable
       run: |
             echo "PARALLEL=-j$(nproc)" >> "$GITHUB_ENV"
-            echo "BOOT_LINUX_TEST=TMP_FILE=\$(mktemp); \
-                                  sudo env TMP_FILE=\${TMP_FILE} .ci/mkdiskimg-blkdev.sh create; \
+            echo "BOOT_LINUX_TEST=TMP_FILE=\$(mktemp "$RUNNER_TEMP/tmpfile.XXXXXX"); \
+                                  sudo env TMP_FILE=\${TMP_FILE} .ci/boot-linux-prepare.sh setup; \
                                   . \${TMP_FILE}; \
                                   .ci/boot-linux.sh; \
                                   EXIT_CODE=\$?; \
-                                  sudo env TMP_FILE=\${TMP_FILE} .ci/mkdiskimg-blkdev.sh delete; \
+                                  sudo env TMP_FILE=\${TMP_FILE} BLK_DEV=\${BLK_DEV} .ci/boot-linux-prepare.sh cleanup; \
                                   exit \${EXIT_CODE};" >> "$GITHUB_ENV"
-            #echo "BOOT_LINUX_TEST=touch build/tmpfile; \
-            #                      sudo env TMP_FILE=\$(realpath build/tmpfile) .ci/mkdiskimg-blkdev.sh create; \
-            #                      . \$(realpath build/tmpfile); \
-            #                      .ci/boot-linux.sh; \
-            #                      EXIT_CODE=\$?; \
-            #                      sudo env TMP_FILE=\$(realpath build/tmpfile) .ci/mkdiskimg-blkdev.sh delete; \
-            #                      exit \${EXIT_CODE};" >> "$GITHUB_ENV"
     - name: fetch artifact first to reduce HTTP requests
       env:
         CC: ${{ steps.install_cc.outputs.cc }}
@@ -131,20 +124,13 @@ jobs:
      - name: Set parallel jobs variable
        run: |
              echo "PARALLEL=-j$(sysctl -n hw.logicalcpu)" >> "$GITHUB_ENV"
-             echo "BOOT_LINUX_TEST=TMP_FILE=\$(mktemp); \
-                                   sudo env TMP_FILE=\${TMP_FILE} .ci/mkdiskimg-blkdev.sh create; \
+             echo "BOOT_LINUX_TEST=TMP_FILE=\$(mktemp "$RUNNER_TEMP/tmpfile.XXXXXX"); \
+                                   sudo env TMP_FILE=\${TMP_FILE} .ci/boot-linux-prepare.sh setup; \
                                    . \${TMP_FILE}; \
                                    .ci/boot-linux.sh; \
                                    EXIT_CODE=\$?; \
-                                   sudo env TMP_FILE=\${TMP_FILE} BLK_DEV=\${BLK_DEV} .ci/mkdiskimg-blkdev.sh delete; \
+                                   sudo env TMP_FILE=\${TMP_FILE} BLK_DEV=\${BLK_DEV} .ci/boot-linux-prepare.sh cleanup; \
                                    exit \${EXIT_CODE};" >> "$GITHUB_ENV"
-             #echo "BOOT_LINUX_TEST=touch build/tmpfile; \
-             #                      sudo env TMP_FILE=\$(realpath build/tmpfile) .ci/mkdiskimg-blkdev.sh create; \
-             #                      . \$(realpath build/tmpfile); \
-             #                      .ci/boot-linux.sh; \
-             #                      EXIT_CODE=\$?; \
-             #                      sudo env TMP_FILE=\$(realpath build/tmpfile) .ci/mkdiskimg-blkdev.sh delete; \
-             #                      exit \${EXIT_CODE};" >> "$GITHUB_ENV"
      - name: Symlink gcc-14 due to the default /usr/local/bin/gcc links to system's clang
        run: |
              ln -s /opt/homebrew/opt/gcc/bin/gcc-14 /usr/local/bin/gcc-14
