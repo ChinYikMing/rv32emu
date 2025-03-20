@@ -65,6 +65,7 @@ jobs:
                                   sudo env TMP_FILE=$(realpath build/tmpfile) .ci/mkdiskimg-loopdev.sh create; \
                                   . $(realpath build/tmpfile); \
                                   .ci/boot-linux.sh; \
+                                  echo $?; \
                                   EXIT_CODE=$?; \
                                   sudo env TMP_FILE=$(realpath build/tmpfile) .ci/mkdiskimg-loopdev.sh delete" \
                                   exit ${EXIT_CODE} >> "$GITHUB_ENV"
