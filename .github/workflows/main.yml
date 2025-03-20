@@ -90,13 +90,7 @@ jobs:
       run: |
             make distclean && make INITRD_SIZE=32 ENABLE_SYSTEM=1 $PARALLEL && make ENABLE_SYSTEM=1 artifact $PARALLEL
             TMP_FILE=$(mktemp)
-            bash -c "${BOOT_LINUX_TEST}"
-            touch build/tmpfile
-            sudo env TMP_FILE=$(realpath build/tmpfile) .ci/mkdiskimg-loopdev.sh create
-            . $(realpath build/tmpfile)
-            .ci/boot-linux.sh
-            echo $?
-            sudo env TMP_FILE=$(realpath build/tmpfile) .ci/mkdiskimg-loopdev.sh delete"
+            bash -c 'exit 3'
             make ENABLE_SYSTEM=1 clean
       if: ${{ always() }}
     - name: boot Linux kernel test (JIT)
