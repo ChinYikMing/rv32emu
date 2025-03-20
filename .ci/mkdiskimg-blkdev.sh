@@ -63,7 +63,6 @@ case "$ACTION" in
 
         # delete tmp file that stores temporary /dev/ block device
         rm "${TMP_FILE}"
-
         ;;
     *)
         printf "Usage: %s {create|delete}\n" "$0"

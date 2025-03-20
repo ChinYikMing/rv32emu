@@ -136,7 +136,7 @@ jobs:
                                    . \${TMP_FILE}; \
                                    .ci/boot-linux.sh; \
                                    EXIT_CODE=\$?; \
-                                   sudo env TMP_FILE=\${TMP_FILE} BLK_DEV=\{BLK_DEV} .ci/mkdiskimg-blkdev.sh delete; \
+                                   sudo env TMP_FILE=\${TMP_FILE} BLK_DEV=\${BLK_DEV} .ci/mkdiskimg-blkdev.sh delete; \
                                    exit \${EXIT_CODE};" >> "$GITHUB_ENV"
              #echo "BOOT_LINUX_TEST=touch build/tmpfile; \
              #                      sudo env TMP_FILE=\$(realpath build/tmpfile) .ci/mkdiskimg-blkdev.sh create; \
