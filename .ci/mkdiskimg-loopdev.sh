@@ -35,13 +35,13 @@ case "$ACTION" in
         # still require elevated privileges (e.g., setuid).
         # To simplify this, we change the ownership to a non-root user.
         # Use this with caution—changing ownership to runner:runner is specific to the GitHub CI environment.
-	chown runner: ${VBLK_IMG}
-	# Add other's rw permission to the disk image and device, so non-superuser can rw the them
-	chmod o+r,o+w ${VBLK_IMG}
-	chmod o+r,o+w ${BLK_DEV}
+        chown runner: ${VBLK_IMG}
+        # Add other's rw permission to the disk image and device, so non-superuser can rw the them
+        chmod o+r,o+w ${VBLK_IMG}
+        chmod o+r,o+w ${BLK_DEV}
 
-        # export ${BLK_DEV} to runner's ENV
-        echo "BLK_DEV=${BLK_DEV}" >> "$GITHUB_ENV"
+        # Export ${BLK_DEV} to a tmp file. Then, export to "$GITHUB_ENV" in job step.
+        echo "BLK_DEV=${BLK_DEV}" > ${TMP_FILE}
         ;;
     delete)
         # Detach the /dev/loopx(Linux) or /dev/diskx(Darwin) to release system resources
@@ -58,7 +58,7 @@ case "$ACTION" in
         rm -f ${VBLK_IMG}
         ;;
     *)
-	printf "Usage: %s {create|delete}\n" "$0"
-	exit 1
+        printf "Usage: %s {create|delete}\n" "$0"
+        exit 1
         ;;
 esac
