@@ -44,6 +44,7 @@ case "$ACTION" in
         echo "BLK_DEV=${BLK_DEV}" > "${TMP_FILE}"
 	echo "--------------"
 	echo ${TMP_FILE}
+	cat ${TMP_FILE}
 	echo "--------------"
         ;;
     delete)
