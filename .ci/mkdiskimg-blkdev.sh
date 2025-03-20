@@ -42,6 +42,9 @@ case "$ACTION" in
 
         # Export ${BLK_DEV} to a tmp file. Then, export to "$GITHUB_ENV" in job step.
         echo "BLK_DEV=${BLK_DEV}" > "${TMP_FILE}"
+	echo "--------------"
+	echo ${TMP_FILE}
+	echo "--------------"
         ;;
     delete)
         # Detach the /dev/loopx(Linux) or /dev/diskx(Darwin) to release system resources
@@ -59,7 +62,6 @@ case "$ACTION" in
 
         # delete tmp file that stores temporary /dev/ block device
         rm "${TMP_FILE}"
-
         ;;
     *)
         printf "Usage: %s {create|delete}\n" "$0"
