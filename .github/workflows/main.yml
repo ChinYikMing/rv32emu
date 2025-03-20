@@ -61,15 +61,12 @@ jobs:
     - name: Set parallel jobs variable
       run: |
             echo "PARALLEL=-j$(nproc)" >> "$GITHUB_ENV"
-            echo "BOOT_LINUX_TEST=$(cat <<'EOF'
-touch build/tmpfile
-TMP_FILE=$(realpath "build/tmpfile")
-sudo env TMP_FILE=${TMP_FILE} .ci/mkdiskimg-loopdev.sh create
-. "${TMP_FILE}"
-.ci/boot-linux.sh
-sudo env TMP_FILE=${TMP_FILE} .ci/mkdiskimg-loopdev.sh delete
-EOF
-)" >> "$GITHUB_ENV"
+            echo 'BOOT_LINUX_TEST=touch build/tmpfile; \
+                                  TMP_FILE=$(realpath "build/tmpfile"); \
+                                  sudo env TMP_FILE=${TMP_FILE} .ci/mkdiskimg-loopdev.sh create; \
+                                  . "${TMP_FILE}"; \
+                                  .ci/boot-linux.sh; \
+                                  sudo env TMP_FILE=${TMP_FILE} .ci/mkdiskimg-loopdev.sh delete' >> "$GITHUB_ENV"
     - name: fetch artifact first to reduce HTTP requests
       env:
         CC: ${{ steps.install_cc.outputs.cc }}
