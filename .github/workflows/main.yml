@@ -84,6 +84,7 @@ jobs:
             touch build/tmpfile
             TMP_FILE=$(realpath "build/tmpfile")
             sudo env TMP_FILE=${TMP_FILE} .ci/mkdiskimg-loopdev.sh create
+            cat ${TMP_FILE}
             echo "$(cat ${TMP_FILE})" >> "$GITHUB_ENV"
             .ci/boot-linux.sh
             sudo .ci/mkdiskimg-loopdev.sh delete
