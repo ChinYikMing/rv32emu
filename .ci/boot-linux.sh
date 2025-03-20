@@ -34,6 +34,7 @@ expect "buildroot login:" { send "root\n" } timeout { exit 1 }
 expect "# " { send "uname -a\n" } timeout { exit 2 }
 expect "riscv32 GNU/Linux" { send "\x01"; send "x" } timeout { exit 3 }
 ')
+EXIT_CODES=()
 
 COLOR_G='\e[32;01m' # Green
 COLOR_R='\e[31;01m' # Red
@@ -94,6 +95,7 @@ for i in "${!TEST_OPTIONS[@]}"; do
 	DONE
 
     ret=$?
+    EXIT_CODE+=(${ret})
     cleanup
 
     printf "\nBoot Linux Test: [ ${MESSAGES[$ret]}${COLOR_N} ]\n"
@@ -106,4 +108,11 @@ for i in "${!TEST_OPTIONS[@]}"; do
     fi
 done
 
-exit ${ret}
+# Check for any failures
+for i in "${!EXIT_CODE[@]}"; do
+  if [[ "${EXIT_CODE[$i]}" -ne 0 ]]; then
+    exit ${EXIT_CODE[$i]}
+  fi
+done
+
+exit 0
