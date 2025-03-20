@@ -22,9 +22,7 @@ cleanup
 
 ENABLE_VBLK=1
 VBLK_IMG=build/disk.img
-which dd >/dev/null 2>&1 || ENABLE_VBLK=0
-which mkfs.ext4 >/dev/null 2>&1 || which $(brew --prefix e2fsprogs)/sbin/mkfs.ext4 >/dev/null 2>&1 || ENABLE_VBLK=0
-which 7z >/dev/null 2>&1 || ENABLE_VBLK=0
+[ -f "${VBLK_IMG}" ] || ENABLE_VBLK=0
 
 TIMEOUT=50
 OPTS_BASE=" -k build/linux-image/Image"
@@ -50,20 +48,6 @@ MESSAGES=("${COLOR_G}OK!" \
 )
 
 if [ "${ENABLE_VBLK}" -eq "1" ]; then
-    dd if=/dev/zero of=${VBLK_IMG} bs=4M count=32
-    mkfs.ext4 ${VBLK_IMG} || $(brew --prefix e2fsprogs)/sbin/mkfs.ext4 ${VBLK_IMG}
-
-    # Setup a /dev/ block device with ${VBLK_IMG} to test guestOS access to hostOS /dev/ block device
-    case "${OS_TYPE}" in
-        Linux)
-            BLK_DEV=$(losetup -f)
-            losetup ${BLK_DEV} ${VBLK_IMG}
-        ;;
-        Darwin)
-            BLK_DEV=$(hdiutil attach -nomount ${VBLK_IMG})
-        ;;
-    esac
-
     # Read-only
     TEST_OPTIONS+=("${OPTS_BASE} -x vblk:${VBLK_IMG},readonly")
     EXPECT_CMDS+=('
@@ -117,17 +101,6 @@ for i in "${!TEST_OPTIONS[@]}"; do
         # read-only test first, so the emu.txt definitely does not exist, skipping the check
         if [[ ! "${TEST_OPTIONS[$i]}" =~ readonly ]]; then
             7z l ${VBLK_IMG} | grep emu.txt >/dev/null 2>&1 || ret=4
-        fi
-        # Detach the /dev/loopx(Linux) or /dev/diskx(Darwin) to release system resources
-        if [[ "${TEST_OPTIONS[$i]}" =~ /dev/ ]]; then
-            case "${OS_TYPE}" in
-                Linux)
-                    losetup -d ${BLK_DEV}
-                    ;;
-                Darwin)
-                    hdiutil detach ${BLK_DEV}
-                    ;;
-            esac
         fi
         printf "Virtio-blk Test: [ ${MESSAGES[$ret]}${COLOR_N} ]\n"
     fi
