@@ -58,11 +58,6 @@ jobs:
       uses: rlalik/setup-cpp-compiler@master
       with:
         compiler: ${{ matrix.compiler }}
-    - name: Setup emsdk
-      uses: mymindstorm/setup-emsdk@v14
-      with:
-        version: 3.1.51
-        actions-cache-folder: 'emsdk-cache'
     - name: Set parallel jobs variable
       run: |
             echo "PARALLEL=-j$(nproc)" >> $GITHUB_ENV
@@ -129,11 +124,6 @@ jobs:
        uses: rlalik/setup-cpp-compiler@master
        with:
          compiler: ${{ matrix.compiler }}
-     - name: Setup emsdk
-       uses: mymindstorm/setup-emsdk@v14
-       with:
-         version: 3.1.51
-         actions-cache-folder: 'emsdk-cache'
      - name: Set parallel jobs variable
        run: |
              echo "PARALLEL=-j$(sysctl -n hw.logicalcpu)" >> $GITHUB_ENV
@@ -172,10 +162,6 @@ jobs:
                   -O build/shareware_doom_iwad.zip \
                   "https://www.doomworld.com/3ddownloads/ports/shareware_doom_iwad.zip"
              unzip -d build/ build/shareware_doom_iwad.zip
-       if: ${{ always() }}
-     - name: default build using emcc
-       run: |
-             make CC=emcc $PARALLEL
        if: ${{ always() }}
      - name: boot Linux kernel test
        env:
