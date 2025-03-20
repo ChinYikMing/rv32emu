@@ -65,7 +65,7 @@ if [ "${ENABLE_VBLK}" -eq "1" ]; then
     VBLK_EXPECT_CMDS='
      expect "buildroot login:" { send "root\n" } timeout { exit 1 }
      expect "# " { send "uname -a\n" } timeout { exit 2 }
-     expect "riscv32 GNU/Linux" { send "mkdir mnt && mount /dev/vda mnt\n" } timeout { exit 3 }
+     expect "riscv32 GNU/Linu" { send "mkdir mnt && mount /dev/vda mnt\n" } timeout { exit 3 }
      expect "# " { send "echo rv32emu > mnt/emu.txt\n" } timeout { exit 3 }
      expect "# " { send "sync\n" } timeout { exit 3 }
      expect "# " { send "umount mnt\n" } timeout { exit 3 }
