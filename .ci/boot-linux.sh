@@ -110,6 +110,7 @@ done
 
 # Check for any failures
 for i in "${!EXIT_CODE[@]}"; do
+  echo ${EXIT_CODE[$i]}
   if [[ "${EXIT_CODE[$i]}" -ne 0 ]]; then
     exit ${EXIT_CODE[$i]}
   fi
