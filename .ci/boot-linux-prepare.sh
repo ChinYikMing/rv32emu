@@ -13,7 +13,7 @@ which 7z >/dev/null 2>&1 || { echo "Error: 7z not found"; exit 1; }
 ACTION=$1
 
 case "$ACTION" in
-    create)
+    setup)
         # Setup a disk image
         dd if=/dev/zero of=${VBLK_IMG} bs=4M count=32
 
@@ -40,14 +40,10 @@ case "$ACTION" in
         chmod o+r,o+w ${VBLK_IMG}
         chmod o+r,o+w ${BLK_DEV}
 
-        # Export ${BLK_DEV} to a tmp file. Then, export to "$GITHUB_ENV" in job step.
+        # Export ${BLK_DEV} to a tmp file. Then, source to "$GITHUB_ENV" in job step.
         echo "export BLK_DEV=${BLK_DEV}" > "${TMP_FILE}"
-	echo "--------------"
-	echo ${TMP_FILE}
-	cat ${TMP_FILE}
-	echo "--------------"
         ;;
-    delete)
+    cleanup)
         # Detach the /dev/loopx(Linux) or /dev/diskx(Darwin) to release system resources
         case "${OS_TYPE}" in
             Linux)
@@ -65,7 +61,7 @@ case "$ACTION" in
         rm "${TMP_FILE}"
         ;;
     *)
-        printf "Usage: %s {create|delete}\n" "$0"
+        printf "Usage: %s {setup|cleanup}\n" "$0"
         exit 1
         ;;
 esac
