@@ -65,7 +65,6 @@ jobs:
                                   sudo env TMP_FILE=$(realpath build/tmpfile) .ci/mkdiskimg-loopdev.sh create; \
                                   . $(realpath build/tmpfile); \
                                   .ci/boot-linux.sh; \
-                                  echo $?; \
                                   EXIT_CODE=$?; \
                                   sudo env TMP_FILE=$(realpath build/tmpfile) .ci/mkdiskimg-loopdev.sh delete" \
                                   exit ${EXIT_CODE} >> "$GITHUB_ENV"
@@ -90,7 +89,7 @@ jobs:
       run: |
             make distclean && make INITRD_SIZE=32 ENABLE_SYSTEM=1 $PARALLEL && make ENABLE_SYSTEM=1 artifact $PARALLEL
             TMP_FILE=$(mktemp)
-            bash -c 'exit 3'
+            bash -c "${BOOT_LINUX_TEST}"
             make ENABLE_SYSTEM=1 clean
       if: ${{ always() }}
     - name: boot Linux kernel test (JIT)

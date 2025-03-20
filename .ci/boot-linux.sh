@@ -106,4 +106,4 @@ for i in "${!TEST_OPTIONS[@]}"; do
     fi
 done
 
-exit 3
+exit ${ret}
