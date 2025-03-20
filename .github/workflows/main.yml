@@ -61,12 +61,12 @@ jobs:
     - name: Set parallel jobs variable
       run: |
             echo "PARALLEL=-j$(nproc)" >> "$GITHUB_ENV"
-            echo 'BOOT_LINUX_TEST=touch build/tmpfile; \
-                                  TMP_FILE=$(realpath "build/tmpfile"); \
+            echo "BOOT_LINUX_TEST=touch build/tmpfile; \
+                                  TMP_FILE=$(realpath build/tmpfile); \
                                   sudo env TMP_FILE=${TMP_FILE} .ci/mkdiskimg-loopdev.sh create; \
-                                  . "${TMP_FILE}"; \
+                                  . ${TMP_FILE}; \
                                   .ci/boot-linux.sh; \
-                                  sudo env TMP_FILE=${TMP_FILE} .ci/mkdiskimg-loopdev.sh delete' >> "$GITHUB_ENV"
+                                  sudo env TMP_FILE=${TMP_FILE} .ci/mkdiskimg-loopdev.sh delete" >> "$GITHUB_ENV"
     - name: fetch artifact first to reduce HTTP requests
       env:
         CC: ${{ steps.install_cc.outputs.cc }}
@@ -124,6 +124,12 @@ jobs:
      - name: Set parallel jobs variable
        run: |
              echo "PARALLEL=-j$(sysctl -n hw.logicalcpu)" >> "$GITHUB_ENV"
+             echo "BOOT_LINUX_TEST=touch build/tmpfile; \
+                                   TMP_FILE=$(realpath build/tmpfile); \
+                                   sudo env TMP_FILE=${TMP_FILE} .ci/mkdiskimg-loopdev.sh create; \
+                                   . ${TMP_FILE}; \
+                                   .ci/boot-linux.sh; \
+                                   sudo env TMP_FILE=${TMP_FILE} .ci/mkdiskimg-loopdev.sh delete" >> "$GITHUB_ENV"
      - name: Symlink gcc-14 due to the default /usr/local/bin/gcc links to system's clang
        run: |
              ln -s /opt/homebrew/opt/gcc/bin/gcc-14 /usr/local/bin/gcc-14
