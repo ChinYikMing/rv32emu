@@ -82,7 +82,7 @@ jobs:
       run: |
             make distclean && make INITRD_SIZE=32 ENABLE_SYSTEM=1 $PARALLEL && make ENABLE_SYSTEM=1 artifact $PARALLEL
             touch build/tmpfile
-            TMP_FILE=$(touch build/tmpfile)
+            TMP_FILE=build/tmpfile
             ls -alh ${TMP_FILE}
             sudo chmod o+r,o+w ${TMP_FILE}
             ls -alh ${TMP_FILE}
