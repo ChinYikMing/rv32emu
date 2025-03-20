@@ -66,7 +66,9 @@ jobs:
                                   . $(realpath build/tmpfile); \
                                   .ci/boot-linux.sh; \
                                   EXIT_CODE=$?; \
+                                  echo ${EXIT_CODE}; \
                                   sudo env TMP_FILE=$(realpath build/tmpfile) .ci/mkdiskimg-loopdev.sh delete; \
+                                  echo ${EXIT_CODE}; \
                                   exit 1;" >> "$GITHUB_ENV"
     - name: fetch artifact first to reduce HTTP requests
       env:
