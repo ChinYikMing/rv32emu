@@ -41,7 +41,7 @@ case "$ACTION" in
 	chmod o+r,o+w ${BLK_DEV}
 
         # export ${BLK_DEV} to runner's ENV
-        echo "BLK_DEV=${BLK_DEV}" >> $GITHUB_ENV
+        echo "BLK_DEV=${BLK_DEV}" >> "$GITHUB_ENV"
         ;;
     delete)
         # Detach the /dev/loopx(Linux) or /dev/diskx(Darwin) to release system resources
