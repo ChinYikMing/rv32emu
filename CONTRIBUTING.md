@@ -54,7 +54,7 @@ For maintaining a uniform coding style, execute the command `clang-format -i *.{
 
 ## Coding Style for Shell Script
 
-Shell scripts must be clean, consistent, and portable. The following `shfmt` rules are enforced project-wide:
+Shell scripts must be clean, consistent, and portable. The following `shfmt` rules(check `.editorconfig` file) are enforced project-wide:
 * Use spaces for indentation.
 * Indent with 4 spaces.
 * Use Unix-style line endings (LF).
