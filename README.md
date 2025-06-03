@@ -104,6 +104,12 @@ Mount the virtual block device and create a test file after booting, note that r
 ```
 Reboot and re-mount the virtual block device, the written file should remain existing.
 
+#### Customize bootargs
+Build and run with customized bootargs to boot the guestOS. Otherwise, the default bootargs defined in `src/devices/minimal.dts` will be used.
+```shell
+$ build/rv32emu -k <kernel_img_path> -i <rootfs_img_path> [-b <bootargs>]
+```
+
 #### Build Linux image
 An automated build script is provided to compile the RISC-V cross-compiler, Busybox, and Linux kernel from source. Please note that it only supports the Linux host environment. It can be found at tools/build-linux-image.sh.
 ```shell
