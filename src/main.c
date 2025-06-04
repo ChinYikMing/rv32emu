@@ -15,6 +15,16 @@
 #include "em_runtime.h"
 #endif
 
+#if RV32_HAS(DEBUG)
+/* setrlimit */
+#if defined(__APPLE__)
+#include <sys/resource.h>
+#else /* Linux */
+#include <sys/resource.h>
+#include <sys/time.h>
+#endif
+#endif /* RV32_HAS(DEBUG) */
+
 #include "elf.h"
 #include "riscv.h"
 #include "utils.h"
@@ -289,6 +299,26 @@ int main(int argc, char **args)
         goto end;
     }
     rv_log_info("RISC-V emulator is created and ready to run");
+
+#if RV32_HAS(DEBUG)
+#define RLIMIT_CUR (16 << 20) /* 16 MiB */
+    struct rlimit old_rl, new_rl;
+    if (getrlimit(RLIMIT_STACK, &old_rl) != 0) {
+        rv_log_error("getrlimit stack size failed");
+        goto end;
+    }
+    new_rl.rlim_cur = RLIMIT_CUR;
+    /* do not change the hard limit(rlim_max) because CAP_SYS_RESOURCE
+     * capability is required */
+    new_rl.rlim_max = old_rl.rlim_max;
+
+    if (0 != setrlimit(RLIMIT_STACK, &new_rl))
+        rv_log_error("setrlimit stack size to %u MiB failed",
+                     RLIMIT_CUR >> 20);
+    else
+        rv_log_info("setrlimit stack size to %u MiB",
+                    RLIMIT_CUR >> 20);
+#endif /* RV32_HAS(DEBUG) */
 
 #if defined(__EMSCRIPTEN__)
     disable_run_button();

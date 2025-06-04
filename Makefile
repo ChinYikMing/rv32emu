@@ -13,6 +13,14 @@ CFLAGS = -std=gnu99 $(OPT_LEVEL) -Wall -Wextra -Werror
 CFLAGS += -Wno-unused-label
 CFLAGS += -include src/common.h -Isrc/
 
+# In debug mode, the program may encounter a stack overflow and crash with a
+# segmentation fault due to limited default stack size on some systems (e.g., x86-64 Linux Ubuntu 22.04).
+# To prevent this, the stack size is increased at runtime when building with debug mode in src/main.c.
+ifeq ($(OPT_LEVEL), -g)
+    ENABLE_DEBUG = 1
+    $(call set-feature, DEBUG)
+endif
+
 OBJS_EXT :=
 
 # In the system test suite, the executable is an ELF file (e.g., MMU).
