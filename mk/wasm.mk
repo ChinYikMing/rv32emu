@@ -29,14 +29,6 @@ CFLAGS_emcc += -sINITIAL_MEMORY=2GB \
 	       -s"EXPORTED_FUNCTIONS=$(EXPORTED_FUNCS)" \
 	       -sSTACK_SIZE=4MB \
 	       -sPTHREAD_POOL_SIZE=navigator.hardwareConcurrency \
-	       --embed-file build/jit-bf.elf@/jit-bf.elf \
-	       --embed-file build/coro.elf@/coro.elf \
-	       --embed-file build/fibonacci.elf@/fibonacci.elf \
-	       --embed-file build/hello.elf@/hello.elf \
-	       --embed-file build/ieee754.elf@/ieee754.elf \
-	       --embed-file build/perfcount.elf@/perfcount.elf \
-	       --embed-file build/readelf.elf@/readelf.elf \
-	       --embed-file build/smolnes.elf@/smolnes.elf \
 	       --embed-file build/riscv32@/riscv32 \
 	       --embed-file build/DOOM1.WAD@/DOOM1.WAD \
 	       --embed-file build/id1/pak0.pak@/id1/pak0.pak \
@@ -44,7 +36,7 @@ CFLAGS_emcc += -sINITIAL_MEMORY=2GB \
 	       --embed-file build/linux-image/Image@Image \
 	       --embed-file build/linux-image/rootfs.cpio@rootfs.cpio \
 	       --embed-file build/minimal.dtb@/minimal.dtb \
-	       -DMEM_SIZE=0x60000000 \
+	       -DMEM_SIZE=0x20000000 \
 	       -DCYCLE_PER_STEP=2000000 \
 	       --pre-js $(WEB_JS_RESOURCES)/pre.js \
 	       -O3 \

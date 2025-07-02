@@ -135,13 +135,16 @@ canvas.emscripten { border: 0px none; background-color: black; }
       <script>
         const inputBuffer = [];
 
-        var term = new Terminal();
+        var term = new Terminal({
+            cols: 120,
+            rows: 25,
+        });
         term.open(document.getElementById('terminal'));
         term.write('xterm.js\x1B[0m $ ')
 	term.scrollToBottom();
 
         term.onData(data => {
-	if (data === '\r') {
+	  if (data === '\r') {
             term.write('\r\n');
             inputBuffer.push(10);
           } else {
@@ -154,7 +157,7 @@ canvas.emscripten { border: 0px none; background-color: black; }
         });
       </script>
 
-    <textarea id="output" rows="8"></textarea>
+      <!--<textarea id="output" rows="8"></textarea>-->
 
     <script src="elf_list.js"></script>
     <script type='text/javascript'>
@@ -218,6 +221,26 @@ canvas.emscripten { border: 0px none; background-color: black; }
             }
           };
         })(),
+	preRun: [
+	    function(){
+                 FS.init(
+                     // stdin
+		     () => {
+                         return inputBuffer.length ? inputBuffer.shift() : null
+                     },
+
+                     // stdout
+		     (c) => {
+		         term.write(String.fromCharCode(c))
+	             },
+
+                     // stderr
+		     (c) => {
+                         term.write('\x1b[31m' + String.fromCharCode(c) + '\x1b[0m')
+                     }
+                 );
+	    }
+	],
         canvas: (() => {
           var canvas = document.getElementById('canvas');
 

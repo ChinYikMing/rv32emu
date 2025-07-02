@@ -85,12 +85,11 @@ static uint8_t u8250_handle_in(u8250_state_t *uart)
     if (!uart->in_ready)
         return value;
 
-    return '\n';
-
     if (read(uart->in_fd, &value, 1) < 0)
         rv_log_error("Failed to read UART input: %s", strerror(errno));
+    //printf("value: %d\n", value);
     uart->in_ready = false;
-    u8250_check_ready(uart);
+    //u8250_check_ready(uart);
 
     if (value == 1) {           /* start of heading (Ctrl-a) */
         if (getchar() == 120) { /* keyboard x */
