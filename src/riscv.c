@@ -423,7 +423,7 @@ riscv_t *rv_create(riscv_user_t rv_attr)
      */
     if (attr->data.system.initrd) {
     printf("map_file3\n");
-        uint32_t initrd_addr = dtb_addr - (8 * 1024 * 1024);
+        uint32_t initrd_addr = dtb_addr - (32 * 1024 * 1024);
         ram_loc = ((char *) attr->mem->mem_base) + initrd_addr;
         map_file(&ram_loc, attr->data.system.initrd);
     }
