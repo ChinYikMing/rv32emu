@@ -130,7 +130,13 @@ endef
 STATIC_WEB_FILES := $(WEB_HTML_RESOURCES)/index.html \
 		    $(WEB_JS_RESOURCES)/coi-serviceworker.min.js
 
-start-web: check-demo-dir-exist $(BIN)
+
+start_web_deps := check-demo-dir-exist $(BIN)
+ifeq ($(call has, SYSTEM), 1)
+start_web_deps += $(BUILD_DTB) $(BUILD_DTB2C)
+endif
+
+start-web: $(start_web_deps)
 	$(foreach T, $(WEB_FILES), $(call cp-web-file, $(T)))
 	$(foreach T, $(STATIC_WEB_FILES), $(call cp-web-file, $(T)))
 	$(Q)python3 -m http.server --bind $(DEMO_IP) $(DEMO_PORT) --directory $(DEMO_DIR)
