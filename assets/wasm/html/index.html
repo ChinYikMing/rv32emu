@@ -4,6 +4,8 @@
     <meta charset="utf-8">
     <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
     <title>Emscripten-Generated Code</title>
+    <link rel="stylesheet" href="node_modules/@xterm/xterm/css/xterm.css" />
+    <script src="node_modules/@xterm/xterm/lib/xterm.js"></script>
     <style>body {
   font-family: arial;
   margin: 0;
@@ -128,6 +130,30 @@ canvas.emscripten { border: 0px none; background-color: black; }
     <div class="emscripten_border">
       <canvas class="emscripten" id="canvas" oncontextmenu="event.preventDefault()" tabindex=-1></canvas>
     </div>
+
+    <div id="terminal"></div>
+      <script>
+        const inputBuffer = [];
+
+        var term = new Terminal();
+        term.open(document.getElementById('terminal'));
+        term.write('xterm.js\x1B[0m $ ')
+	term.scrollToBottom();
+
+        term.onData(data => {
+	if (data === '\r') {
+            term.write('\r\n');
+            inputBuffer.push(10);
+          } else {
+            term.write(data);
+            for (let i = 0; i < data.length; i++) {
+              inputBuffer.push(data.charCodeAt(i));
+            }
+          }
+	  term.scrollToBottom();
+        });
+      </script>
+
     <textarea id="output" rows="8"></textarea>
 
     <script src="elf_list.js"></script>
@@ -182,6 +208,10 @@ canvas.emscripten { border: 0px none; background-color: black; }
             //text = text.replace(/>/g, "&gt;");
             //text = text.replace('\n', '<br>', 'g');
             console.log(text);
+	    if (typeof term !== "undefined") {
+              term.write(text + "\n");
+	      term.scrollToBottom();
+            }
             if (element) {
               element.value += text + "\n";
               element.scrollTop = element.scrollHeight; // focus on bottom

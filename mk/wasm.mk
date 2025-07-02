@@ -41,6 +41,9 @@ CFLAGS_emcc += -sINITIAL_MEMORY=2GB \
 	       --embed-file build/DOOM1.WAD@/DOOM1.WAD \
 	       --embed-file build/id1/pak0.pak@/id1/pak0.pak \
 	       --embed-file build/timidity@/etc/timidity \
+	       --embed-file build/linux-image/Image@Image \
+	       --embed-file build/linux-image/rootfs.cpio@rootfs.cpio \
+	       --embed-file build/minimal.dtb@/minimal.dtb \
 	       -DMEM_SIZE=0x60000000 \
 	       -DCYCLE_PER_STEP=2000000 \
 	       --pre-js $(WEB_JS_RESOURCES)/pre.js \

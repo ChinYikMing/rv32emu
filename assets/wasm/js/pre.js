@@ -5,5 +5,9 @@ Module['onRuntimeInitialized'] = function(target_elf) {
       return;
     }
 
-    callMain([target_elf]);
+    if(target_elf.startsWith("-k")){
+        callMain(target_elf.split(" "));
+    } else {
+        callMain([target_elf]);
+    }
 };

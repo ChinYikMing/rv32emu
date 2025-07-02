@@ -45,10 +45,12 @@ msg_less_ignore_files = [
 ]  # List of files to ignore
 elf_exec_list = []
 
+# Add system target
+elf_exec_list.append("-k Image -i rootfs.cpio")
+
 for d in elf_exec_dirs:
     files = list_files(d, ignore_list=msg_less_ignore_files)
     elf_exec_list.extend(files)
-
 
 def gen_elf_list_js():
     js_code = f"const elfFiles = {elf_exec_list};\n"

@@ -477,7 +477,7 @@ uint32_t *virtio_blk_init(virtio_blk_state_t *vblk,
 
     /* Set up the disk memory */
     uint32_t *disk_mem;
-#if HAVE_MMAP
+#if HAVE_MMAP && !defined(__EMSCRIPTEN__)
     disk_mem = mmap(NULL, VBLK_PRIV(vblk)->disk_size,
                     readonly ? PROT_READ : (PROT_READ | PROT_WRITE), MAP_SHARED,
                     disk_fd, 0);

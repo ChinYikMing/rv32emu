@@ -10,6 +10,12 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <sys/select.h>
+#include <fcntl.h>
+
+#ifdef __EMSCRIPTEN__
+#include <emscripten.h>
+#endif
 
 #include "uart.h"
 /* Emulate 8250 (plain, without loopback mode support) */
@@ -38,10 +44,32 @@ void u8250_check_ready(u8250_state_t *uart)
     if (uart->in_ready)
         return;
 
+#if defined(__EMSCRIPTEN__) // poll in WASI might having bugs
+    fd_set readfds;
+    struct timeval timeout;
+    FD_ZERO(&readfds);
+    FD_SET(STDIN_FILENO, &readfds);  // stdin (file descriptor 0)
+    timeout.tv_sec = 0;
+    timeout.tv_usec = 0;
+
+    // Wait for input on stdin
+    int result = select(1, &readfds, NULL, NULL, &timeout);
+
+    if (result == -1) {
+        perror("select");
+        exit(EXIT_FAILURE);
+    } else if (result == 0) {
+    } else {
+        if (FD_ISSET(STDIN_FILENO, &readfds)) {
+		uart->in_ready = true;
+        }
+    }
+#else
     struct pollfd pfd = {uart->in_fd, POLLIN, 0};
     poll(&pfd, 1, 0);
     if (pfd.revents & POLLIN)
         uart->in_ready = true;
+#endif
 }
 
 static void u8250_handle_out(u8250_state_t *uart, uint8_t value)
@@ -56,6 +84,8 @@ static uint8_t u8250_handle_in(u8250_state_t *uart)
     u8250_check_ready(uart);
     if (!uart->in_ready)
         return value;
+
+    return '\n';
 
     if (read(uart->in_fd, &value, 1) < 0)
         rv_log_error("Failed to read UART input: %s", strerror(errno));
