@@ -140,20 +140,34 @@ canvas.emscripten { border: 0px none; background-color: black; }
             rows: 25,
         });
         term.open(document.getElementById('terminal'));
-        term.write('xterm.js\x1B[0m $ ')
+        term.write('$ ')
 	term.scrollToBottom();
 
-        term.onData(data => {
-	  if (data === '\r') {
+        let currLine = "";
+
+        term.onKey(({ key, domEvent }) => {
+          const code = key.charCodeAt(0);
+
+          if (domEvent.key === 'Enter') {
             term.write('\r\n');
-            inputBuffer.push(10);
-          } else {
-            term.write(data);
-            for (let i = 0; i < data.length; i++) {
-              inputBuffer.push(data.charCodeAt(i));
+	    inputBuffer.push(...currLine.split("").map(c => c.charCodeAt(0)));
+            inputBuffer.push(10);  // ASCII LF
+	    //console.log(currLine)
+            currLine = "";         // reset after sending
+          } else if (domEvent.key === 'Backspace') {
+            if (currLine.length > 0) {
+              currLine = currLine.slice(0, -1);    // update local buffer
+	      //console.log(currLine)
+              term.write('\b \b');                 // visual erase
             }
+          } else if (domEvent.key.length === 1 && code >= 32 && code < 127) {
+            // Printable characters
+            currLine += key;
+            term.write(key);
+	    //console.log(currLine)
           }
-	  term.scrollToBottom();
+
+          term.scrollToBottom();
         });
       </script>
 
