@@ -47,7 +47,7 @@ Module["onRuntimeInitialized"] = function (target_elf) {
         // ESC [ D → "\x1B[D"
         sequence = "\x1B[D";
         break;
-      // TODO: support more keys?
+      // TODO: support more escape keys?
       default:
         sequence = key;
         break;
