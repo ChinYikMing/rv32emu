@@ -1,16 +1,16 @@
 Module["noInitialRun"] = true;
 
-Module["run"] = function (target_elf) {
+Module["run_user"] = function (target_elf) {
   if (target_elf === undefined) {
     console.warn("target elf executable is undefined");
     return;
   }
 
-  if (target_elf.startsWith("-k")) {
-    callMain(target_elf.split(" "));
-  } else {
-    callMain([target_elf]);
-  }
+  callMain([target_elf]);
+};
+
+Module["run_system"] = function (cli_param) {
+  callMain(cli_param.split(" "));
 };
 
 // index.html's preRun needs to access this, thus declaring as global
@@ -68,7 +68,7 @@ Module["onRuntimeInitialized"] = function (target_elf) {
     }
 
     Module._set_input_buf_size(sequence.length);
-    Module._set_input_buf_in(true);
+    Module._set_input_buf_avail(true);
 
     term.scrollToBottom();
   });

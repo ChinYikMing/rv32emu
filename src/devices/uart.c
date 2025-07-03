@@ -5,12 +5,12 @@
 
 #include <assert.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <poll.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <fcntl.h>
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
@@ -48,19 +48,23 @@ static uint8_t input_buf_size;
 static uint8_t input_buf_start = 0;
 bool is_input_buf_avail = false;
 
-char *get_input_buf() {
+char *get_input_buf()
+{
     return input_buf;
 }
 
-uint8_t get_input_buf_cap() {
+uint8_t get_input_buf_cap()
+{
     return INPUT_BUF_MAX_CAP;
 }
 
-void set_input_buf_avail(bool flag) {
+void set_input_buf_avail(bool flag)
+{
     is_input_buf_avail = flag;
 }
 
-void set_input_buf_size(uint8_t size) {
+void set_input_buf_size(uint8_t size)
+{
     input_buf_size = size;
 }
 
@@ -96,10 +100,11 @@ static uint8_t u8250_handle_in(u8250_state_t *uart)
         return value;
 
 #if defined(__EMSCRIPTEN__)
-    value = (uint8_t) input_buf[input_buf_start]; // the index 0 always is the latest key
+    value = (uint8_t)
+        input_buf[input_buf_start];  // the index 0 always is the latest key
     input_buf_start++;
-    if(--input_buf_size == 0){
-	input_buf_start = 0;
+    if (--input_buf_size == 0) {
+        input_buf_start = 0;
         set_input_buf_avail(false);
     }
 #else
@@ -108,7 +113,7 @@ static uint8_t u8250_handle_in(u8250_state_t *uart)
 #endif
     uart->in_ready = false;
 
-    if (value == 1) {           /* start of heading (Ctrl-a) */
+    if (value == 1) { /* start of heading (Ctrl-a) */
         u8250_check_ready(uart);
         if (getchar() == 120) { /* keyboard x */
             rv_log_info("RISC-V emulator is destroyed");

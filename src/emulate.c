@@ -1005,7 +1005,7 @@ static bool rv_has_plic_trap(riscv_t *rv)
 
 #if defined(__EMSCRIPTEN__)
 extern uint8_t escape_char_size;
-extern bool is_input_buffer_in;
+extern bool is_input_buf_avail;
 #endif
 
 static void rv_check_interrupt(riscv_t *rv)
@@ -1015,7 +1015,7 @@ static void rv_check_interrupt(riscv_t *rv)
         peripheral_update_ctr = 64;
 
 #if defined(__EMSCRIPTEN__)
-read_more:
+    escape:
 #endif
         u8250_check_ready(PRIV(rv)->uart);
         if (PRIV(rv)->uart->in_ready)
@@ -1040,16 +1040,15 @@ read_more:
         case (SUPERVISOR_EXTERNAL_INTR & 0xf):
             SET_CAUSE_AND_TVAL_THEN_TRAP(rv, SUPERVISOR_EXTERNAL_INTR, 0);
 #if defined(__EMSCRIPTEN__)
-	    /* escape character has more than 1 byte */
-            if(is_input_buffer_in)
-	         goto read_more;
+            /* escape character has more than 1 byte */
+            if (is_input_buf_avail)
+                goto escape;
 #endif
             break;
         default:
             break;
         }
     }
-
 }
 #endif
 
