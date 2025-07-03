@@ -41,15 +41,21 @@ void u8250_update_interrupts(u8250_state_t *uart)
 #if defined(__EMSCRIPTEN__)
 
 // Allocate buffer in WASM memory
-char input_buffer;
+char input_buffer[8];
 bool is_input_buffer_in = false;
 
 char *get_input_buffer() {
-    return &input_buffer;
+    return input_buffer;
 }
 
 void set_input_buffer_in(bool flag) {
     is_input_buffer_in = flag;
+}
+
+uint8_t escape_char_size;
+uint8_t buffer_start = 0;
+void set_escape_char_size(uint8_t size) {
+    escape_char_size = size;
 }
 #endif
 
@@ -83,8 +89,17 @@ static uint8_t u8250_handle_in(u8250_state_t *uart)
         return value;
 
 #if defined(__EMSCRIPTEN__)
-    value = (uint8_t) input_buffer;
-    set_input_buffer_in(false);
+    value = (uint8_t) input_buffer[buffer_start]; // the index 0 always is the latest key
+    buffer_start++;
+    //printf("value: %u\n", value);
+    if(--escape_char_size == 0){
+	buffer_start = 0;
+        set_input_buffer_in(false);
+    }
+    // escape arrow key debug
+    //for(int i = 0; i < 3; i++){
+    //	printf("%d\n", (uint8_t) input_buffer[i]);
+    //}
 #else
     if (read(uart->in_fd, &value, 1) < 0)
         rv_log_error("Failed to read UART input: %s", strerror(errno));

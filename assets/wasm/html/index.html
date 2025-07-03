@@ -200,9 +200,10 @@ canvas.emscripten { border: 0px none; background-color: black; }
 	    function(){
                  FS.init(
                      // stdin
-		     () => {
-			 return is_cbuffer_avail ? (is_cbuffer_avail = false, Module.HEAPU8[cbuffer_ptr]) : null;
-                     },
+		     null,
+		     //() => {
+                     //    //return is_cbuffer_avail ? (is_cbuffer_avail = false, Module.HEAPU8[cbuffer_ptr]) : null
+                     //},
 
                      // stdout
 		     (c) => {

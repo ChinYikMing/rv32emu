@@ -2,7 +2,8 @@ Module['noInitialRun'] = true;
 let init = false;
 let cbuffer_ptr;
 let term;
-let is_cbuffer_avail = false;
+let sequence;
+
 Module['onRuntimeInitialized'] = function(target_elf) {
 	if(!init){
 		init = true;
@@ -21,15 +22,44 @@ Module['onRuntimeInitialized'] = function(target_elf) {
     term.onKey(({ key, domEvent }) => {
         const code = key.charCodeAt(0);
 
-        Module._set_input_buffer_in(true);
-	Module.HEAPU8[cbuffer_ptr] = code;
-        is_cbuffer_avail = true;
+	switch (domEvent.key) {
+        case 'ArrowUp':
+            // Real terminal sends ESC [ A → "\x1B[A"
+	    sequence = '\x1B[A';
+            break;
+        case 'ArrowDown':
+            // Real terminal sends ESC [ B → "\x1B[B"
+	    sequence = '\x1B[B';
+            break;
+        case 'ArrowRight':
+            // Real terminal sends ESC [ C → "\x1B[C"
+	    sequence = '\x1B[C';
+            break;
+        case 'ArrowLeft':
+            // Real terminal sends ESC [ D → "\x1B[D"
+	    sequence = '\x1B[D';
+            break;
+        default:
+	    sequence = key;
+	    break;
+    }
+
+            let heap = new Uint8Array(Module.HEAPU8.buffer, cbuffer_ptr, sequence.length);
+
+	    for (let i = 0; i < sequence.length && i < 8; i++) {
+                heap[i] = sequence.charCodeAt(i);
+            }
+            for (let i = sequence.length; i < 8; i++) {
+                heap[i] = 0;  // Zero-fill
+            }
+
+	    Module._set_escape_char_size(sequence.length);
+            Module._set_input_buffer_in(true);
+
 	//console.log(code);
 
         term.scrollToBottom();
     });
-
-
 
 	}
 

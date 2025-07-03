@@ -3,7 +3,7 @@ deps_emcc :=
 ASSETS := assets/wasm
 WEB_HTML_RESOURCES := $(ASSETS)/html
 WEB_JS_RESOURCES := $(ASSETS)/js
-EXPORTED_FUNCS := _main,_indirect_rv_halt,_get_input_buffer,_set_input_buffer_in
+EXPORTED_FUNCS := _main,_indirect_rv_halt,_get_input_buffer,_set_input_buffer_in,_set_escape_char_size
 DEMO_DIR := demo
 WEB_FILES := $(BIN).js \
              $(BIN).wasm \
