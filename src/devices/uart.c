@@ -40,23 +40,30 @@ void u8250_update_interrupts(u8250_state_t *uart)
 
 #if defined(__EMSCRIPTEN__)
 
-// Allocate buffer in WASM memory
-char input_buffer[8];
-bool is_input_buffer_in = false;
+#define INPUT_BUF_MAX_CAP 128
 
-char *get_input_buffer() {
-    return input_buffer;
+// Allocate buf in WASM memory
+static char input_buf[INPUT_BUF_MAX_CAP];
+static uint8_t input_buf_size;
+static uint8_t input_buf_start = 0;
+bool is_input_buf_avail = false;
+
+char *get_input_buf() {
+    return input_buf;
 }
 
-void set_input_buffer_in(bool flag) {
-    is_input_buffer_in = flag;
+uint8_t get_input_buf_cap() {
+    return INPUT_BUF_MAX_CAP;
 }
 
-uint8_t escape_char_size;
-uint8_t buffer_start = 0;
-void set_escape_char_size(uint8_t size) {
-    escape_char_size = size;
+void set_input_buf_avail(bool flag) {
+    is_input_buf_avail = flag;
 }
+
+void set_input_buf_size(uint8_t size) {
+    input_buf_size = size;
+}
+
 #endif
 
 void u8250_check_ready(u8250_state_t *uart)
@@ -65,7 +72,7 @@ void u8250_check_ready(u8250_state_t *uart)
         return;
 
 #if defined(__EMSCRIPTEN__)
-    if (is_input_buffer_in)
+    if (is_input_buf_avail)
         uart->in_ready = true;
 #else
     struct pollfd pfd = {uart->in_fd, POLLIN, 0};
@@ -89,17 +96,12 @@ static uint8_t u8250_handle_in(u8250_state_t *uart)
         return value;
 
 #if defined(__EMSCRIPTEN__)
-    value = (uint8_t) input_buffer[buffer_start]; // the index 0 always is the latest key
-    buffer_start++;
-    //printf("value: %u\n", value);
-    if(--escape_char_size == 0){
-	buffer_start = 0;
-        set_input_buffer_in(false);
+    value = (uint8_t) input_buf[input_buf_start]; // the index 0 always is the latest key
+    input_buf_start++;
+    if(--input_buf_size == 0){
+	input_buf_start = 0;
+        set_input_buf_avail(false);
     }
-    // escape arrow key debug
-    //for(int i = 0; i < 3; i++){
-    //	printf("%d\n", (uint8_t) input_buffer[i]);
-    //}
 #else
     if (read(uart->in_fd, &value, 1) < 0)
         rv_log_error("Failed to read UART input: %s", strerror(errno));
