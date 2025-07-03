@@ -83,6 +83,7 @@ jobs:
             github.event_name == 'workflow_dispatch' ||
             github.event_name == 'repository_dispatch' }}
         run: |
+            npm install @xterm/xterm
             mv /tmp/rv32emu-demo-system/index.html .
             mv /tmp/rv32emu-demo-system/coi-serviceworker.min.js .
             mv /tmp/rv32emu-demo-system/rv32emu.js .
