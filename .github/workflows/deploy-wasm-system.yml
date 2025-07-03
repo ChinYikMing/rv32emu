@@ -21,6 +21,10 @@ jobs:
     steps:
       - name: Check out the repo
         uses: actions/checkout@v4
+      - name: install-dependencies
+        run: |
+              sudo apt-get update -q=2
+              sudo apt-get install -q=2 libsdl2-dev libsdl2-mixer-dev device-tree-compiler
       - name: Verify if the JS or HTML files has been modified
         id: changed-files
         uses: tj-actions/changed-files@v46
