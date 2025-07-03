@@ -21,16 +21,16 @@ jobs:
     steps:
       - name: Check out the repo
         uses: actions/checkout@v4
-      - name: Verify if the JS or HTML or ELF executable files has been modified
+      - name: Verify if the JS or HTML files has been modified
         id: changed-files
         uses: tj-actions/changed-files@v46
         with:
           files: |
-              assets/wasm/html/index.html
-              assets/wasm/js/pre.js
-              build/*.elf
-              tools/gen-elf-list-js.py
+              assets/wasm/html/system.html
+              assets/wasm/js/system-pre.js
               # Files below may have a potential performance impact (reference from benchmark.yml)
+              src/devices/*.c
+              src/system.c
               src/riscv.c
               src/decode.c
               src/emulate.c
@@ -66,33 +66,31 @@ jobs:
             github.event_name == 'repository_dispatch' }}
         run: |
             make CC=emcc ENABLE_SDL=1
-            mkdir /tmp/rv32emu-demo
-            mv assets/wasm/html/index.html /tmp/rv32emu-demo
-            mv assets/wasm/js/coi-serviceworker.min.js /tmp/rv32emu-demo
-            mv build/elf_list.js /tmp/rv32emu-demo
-            mv build/rv32emu.js /tmp/rv32emu-demo
-            mv build/rv32emu.wasm /tmp/rv32emu-demo
-            mv build/rv32emu.worker.js /tmp/rv32emu-demo
-            ls -al /tmp/rv32emu-demo
-      - name: Check out the rv32emu-demo repo
+            mkdir /tmp/rv32emu-demo-system
+            mv assets/wasm/html/system.html /tmp/rv32emu-demo-system/index.html
+            mv assets/wasm/js/coi-serviceworker.min.js /tmp/rv32emu-demo-system
+            mv build/rv32emu.js /tmp/rv32emu-demo-system
+            mv build/rv32emu.wasm /tmp/rv32emu-demo-system
+            mv build/rv32emu.worker.js /tmp/rv32emu-demo-system
+            ls -al /tmp/rv32emu-demo-system
+      - name: Check out the rv32emu-demo-system repo
         if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
             github.event_name == 'workflow_dispatch' ||
             github.event_name == 'repository_dispatch' }}
         uses: actions/checkout@v4
         with:
           persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
-          repository: sysprog21/rv32emu-demo
+          repository: sysprog21/rv32emu-demo-system
       - name: Create local changes
         if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
             github.event_name == 'workflow_dispatch' ||
             github.event_name == 'repository_dispatch' }}
         run: |
-            mv /tmp/rv32emu-demo/index.html .
-            mv /tmp/rv32emu-demo/coi-serviceworker.min.js .
-            mv /tmp/rv32emu-demo/elf_list.js .
-            mv /tmp/rv32emu-demo/rv32emu.js .
-            mv /tmp/rv32emu-demo/rv32emu.wasm .
-            mv /tmp/rv32emu-demo/rv32emu.worker.js .
+            mv /tmp/rv32emu-demo-system/index.html .
+            mv /tmp/rv32emu-demo-system/coi-serviceworker.min.js .
+            mv /tmp/rv32emu-demo-system/rv32emu.js .
+            mv /tmp/rv32emu-demo-system/rv32emu.wasm .
+            mv /tmp/rv32emu-demo-system/rv32emu.worker.js .
       - name: Commit files
         if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
             github.event_name == 'workflow_dispatch' ||
@@ -108,6 +106,6 @@ jobs:
             github.event_name == 'repository_dispatch' }}
         uses: ad-m/github-push-action@master
         with:
-          repository: sysprog21/rv32emu-demo
-          github_token: ${{ secrets.RV32EMU_DEMO_TOKEN }}
+          repository: sysprog21/rv32emu-demo-system
+          github_token: ${{ secrets.RV32EMU_DEMO_SYSTEM_TOKEN }}
           branch: main

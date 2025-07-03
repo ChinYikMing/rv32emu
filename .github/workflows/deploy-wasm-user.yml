@@ -1,0 +1,113 @@
+name: WebAssembly
+
+on:
+  pull_request_target:
+    branches:
+      - master
+    types:
+      - closed
+  workflow_dispatch:
+    branches:
+      - master
+  repository_dispatch:   # listening to rv32emu-prebuilt events
+    types: [deploy_wasm]
+
+jobs:
+  wasm-deploy:
+    if: github.event.pull_request.merged == true ||
+        github.event_name == 'workflow_dispatch' ||
+        github.event_name == 'repository_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+      - name: Verify if the JS or HTML or ELF executable files has been modified
+        id: changed-files
+        uses: tj-actions/changed-files@v46
+        with:
+          files: |
+              assets/wasm/html/user.html
+              assets/wasm/js/user-pre.js
+              build/*.elf
+              tools/gen-elf-list-js.py
+              # Files below may have a potential performance impact (reference from benchmark.yml)
+              src/riscv.c
+              src/decode.c
+              src/emulate.c
+              src/rv32_template.c
+              src/rv32_constopt.c
+      - name: install emcc
+        if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
+            github.event_name == 'workflow_dispatch' ||
+            github.event_name == 'repository_dispatch' }}
+        run: |
+            git clone https://github.com/emscripten-core/emsdk.git
+            cd emsdk
+            git pull
+            git checkout 3.1.51
+            ./emsdk install latest
+            ./emsdk activate latest
+            source ./emsdk_env.sh
+            echo "$PATH" >> $GITHUB_PATH
+        shell: bash
+      - name: fetch artifact
+        run: |
+              make artifact
+              # Hack Cloudflare 403 Forbidden on GitHub Runner for Doom artifact download
+              wget --header="User-Agent: Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:122.0) Gecko/20100101 Firefox/122.0" \
+                   --header="Referer: https://www.doomworld.com/" \
+                   --header="Accept-Language: en-US,en;q=0.9" \
+                   -O build/shareware_doom_iwad.zip \
+                   "https://www.doomworld.com/3ddownloads/ports/shareware_doom_iwad.zip"
+              unzip -d build/ build/shareware_doom_iwad.zip
+      - name: build with emcc and move application files to /tmp
+        if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
+            github.event_name == 'workflow_dispatch' ||
+            github.event_name == 'repository_dispatch' }}
+        run: |
+            make CC=emcc ENABLE_SDL=1
+            mkdir /tmp/rv32emu-demo
+            mv assets/wasm/html/user.html /tmp/rv32emu-demo/index.html
+            mv assets/wasm/js/coi-serviceworker.min.js /tmp/rv32emu-demo
+            mv build/elf_list.js /tmp/rv32emu-demo
+            mv build/rv32emu.js /tmp/rv32emu-demo
+            mv build/rv32emu.wasm /tmp/rv32emu-demo
+            mv build/rv32emu.worker.js /tmp/rv32emu-demo
+            ls -al /tmp/rv32emu-demo
+      - name: Check out the rv32emu-demo repo
+        if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
+            github.event_name == 'workflow_dispatch' ||
+            github.event_name == 'repository_dispatch' }}
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
+          repository: sysprog21/rv32emu-demo
+      - name: Create local changes
+        if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
+            github.event_name == 'workflow_dispatch' ||
+            github.event_name == 'repository_dispatch' }}
+        run: |
+            mv /tmp/rv32emu-demo/index.html .
+            mv /tmp/rv32emu-demo/coi-serviceworker.min.js .
+            mv /tmp/rv32emu-demo/elf_list.js .
+            mv /tmp/rv32emu-demo/rv32emu.js .
+            mv /tmp/rv32emu-demo/rv32emu.wasm .
+            mv /tmp/rv32emu-demo/rv32emu.worker.js .
+      - name: Commit files
+        if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
+            github.event_name == 'workflow_dispatch' ||
+            github.event_name == 'repository_dispatch' }}
+        run: |
+            git config --local user.email "github-actions[bot]@users.noreply.github.com"
+            git config --local user.name "github-actions[bot]"
+            git add --all
+            git commit -m "Add changes"
+      - name: Push changes
+        if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
+            github.event_name == 'workflow_dispatch' ||
+            github.event_name == 'repository_dispatch' }}
+        uses: ad-m/github-push-action@master
+        with:
+          repository: sysprog21/rv32emu-demo
+          github_token: ${{ secrets.RV32EMU_DEMO_TOKEN }}
+          branch: main
