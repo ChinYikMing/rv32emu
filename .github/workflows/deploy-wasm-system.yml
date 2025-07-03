@@ -65,7 +65,7 @@ jobs:
             github.event_name == 'workflow_dispatch' ||
             github.event_name == 'repository_dispatch' }}
         run: |
-            make CC=emcc ENABLE_SDL=1
+            make CC=emcc ENABLE_SYSTEM=1 ENABLE_SDL=1 INITRD_SIZE=32 -j
             mkdir /tmp/rv32emu-demo-system
             mv assets/wasm/html/system.html /tmp/rv32emu-demo-system/index.html
             mv assets/wasm/js/coi-serviceworker.min.js /tmp/rv32emu-demo-system
