@@ -38,15 +38,35 @@ void u8250_update_interrupts(u8250_state_t *uart)
         uart->current_intr = ilog2(uart->pending_intrs);
 }
 
+#if defined(__EMSCRIPTEN__)
+
+// Allocate buffer in WASM memory
+char input_buffer;
+bool is_input_buffer_in = false;
+
+char *get_input_buffer() {
+    return &input_buffer;
+}
+
+void set_input_buffer_in(bool flag) {
+    is_input_buffer_in = flag;
+}
+#endif
+
 void u8250_check_ready(u8250_state_t *uart)
 {
     if (uart->in_ready)
         return;
 
+#if defined(__EMSCRIPTEN__)
+    if (is_input_buffer_in)
+        uart->in_ready = true;
+#else
     struct pollfd pfd = {uart->in_fd, POLLIN, 0};
     poll(&pfd, 1, 0);
     if (pfd.revents & POLLIN)
         uart->in_ready = true;
+#endif
 }
 
 static void u8250_handle_out(u8250_state_t *uart, uint8_t value)
@@ -62,8 +82,13 @@ static uint8_t u8250_handle_in(u8250_state_t *uart)
     if (!uart->in_ready)
         return value;
 
+#if defined(__EMSCRIPTEN__)
+    value = (uint8_t) input_buffer;
+    set_input_buffer_in(false);
+#else
     if (read(uart->in_fd, &value, 1) < 0)
         rv_log_error("Failed to read UART input: %s", strerror(errno));
+#endif
     uart->in_ready = false;
 
     if (value == 1) {           /* start of heading (Ctrl-a) */
