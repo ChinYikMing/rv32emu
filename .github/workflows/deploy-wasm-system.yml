@@ -7,9 +7,6 @@ on:
     types:
       - closed
   workflow_dispatch:
-    branches:
-      - master
-      - sys-emu-wasm
   repository_dispatch:   # listening to rv32emu-prebuilt events
     types: [deploy_wasm]
 
