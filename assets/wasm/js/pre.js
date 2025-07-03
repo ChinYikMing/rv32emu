@@ -39,6 +39,7 @@ Module['onRuntimeInitialized'] = function(target_elf) {
             // Real terminal sends ESC [ D → "\x1B[D"
 	    sequence = '\x1B[D';
             break;
+	// TODO: support more keys?
         default:
 	    sequence = key;
 	    break;
