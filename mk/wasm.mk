@@ -29,18 +29,32 @@ CFLAGS_emcc += -sINITIAL_MEMORY=2GB \
 	       -s"EXPORTED_FUNCTIONS=$(EXPORTED_FUNCS)" \
 	       -sSTACK_SIZE=4MB \
 	       -sPTHREAD_POOL_SIZE=navigator.hardwareConcurrency \
+	       --embed-file build/timidity@/etc/timidity \
+	       -DMEM_SIZE=0x20000000 \
+	       -DCYCLE_PER_STEP=2000000 \
+	       -O3 \
+	       -w
+
+ifeq ($(call has, SYSTEM), 1)
+CFLAGS_emcc += --embed-file build/linux-image/Image@Image \
+	       --embed-file build/linux-image/rootfs.cpio@rootfs.cpio \
+	       --embed-file build/minimal.dtb@/minimal.dtb \
+	       --pre-js $(WEB_JS_RESOURCES)/system-pre.js
+else
+CFLAGS_emcc += --embed-file build/jit-bf.elf@/jit-bf.elf \
+	       --embed-file build/coro.elf@/coro.elf \
+	       --embed-file build/fibonacci.elf@/fibonacci.elf \
+	       --embed-file build/hello.elf@/hello.elf \
+	       --embed-file build/ieee754.elf@/ieee754.elf \
+	       --embed-file build/perfcount.elf@/perfcount.elf \
+	       --embed-file build/readelf.elf@/readelf.elf \
+	       --embed-file build/smolnes.elf@/smolnes.elf \
 	       --embed-file build/riscv32@/riscv32 \
 	       --embed-file build/DOOM1.WAD@/DOOM1.WAD \
 	       --embed-file build/id1/pak0.pak@/id1/pak0.pak \
-	       --embed-file build/timidity@/etc/timidity \
-	       --embed-file build/linux-image/Image@Image \
-	       --embed-file build/linux-image/rootfs.cpio@rootfs.cpio \
-	       --embed-file build/minimal.dtb@/minimal.dtb \
-	       -DMEM_SIZE=0x20000000 \
-	       -DCYCLE_PER_STEP=2000000 \
-	       --pre-js $(WEB_JS_RESOURCES)/pre.js \
-	       -O3 \
-	       -w
+	       --pre-js $(WEB_JS_RESOURCES)/user-pre.js
+endif
+
 
 $(OUT)/elf_list.js: tools/gen-elf-list-js.py
 	$(Q)tools/gen-elf-list-js.py > $@
@@ -127,9 +141,12 @@ define cp-web-file
 endef
 
 # WEB_FILES could be cleaned and recompiled, thus do not mix these two files into WEB_FILES
-STATIC_WEB_FILES := $(WEB_HTML_RESOURCES)/index.html \
-		    $(WEB_JS_RESOURCES)/coi-serviceworker.min.js
-
+STATIC_WEB_FILES := $(WEB_JS_RESOURCES)/coi-serviceworker.min.js
+ifeq ($(call has, SYSTEM), 1)
+STATIC_WEB_FILES += $(WEB_HTML_RESOURCES)/system.html
+else
+STATIC_WEB_FILES += $(WEB_HTML_RESOURCES)/user.html
+endif
 
 start_web_deps := check-demo-dir-exist $(BIN)
 ifeq ($(call has, SYSTEM), 1)
@@ -137,7 +154,9 @@ start_web_deps += $(BUILD_DTB) $(BUILD_DTB2C)
 endif
 
 start-web: $(start_web_deps)
+	$(Q)rm -f $(DEMO_DIR)/*.html
 	$(foreach T, $(WEB_FILES), $(call cp-web-file, $(T)))
 	$(foreach T, $(STATIC_WEB_FILES), $(call cp-web-file, $(T)))
+	$(Q)mv $(DEMO_DIR)/*.html $(DEMO_DIR)/index.html
 	$(Q)python3 -m http.server --bind $(DEMO_IP) $(DEMO_PORT) --directory $(DEMO_DIR)
 endif

@@ -1,14 +1,5 @@
 Module["noInitialRun"] = true;
 
-Module["run_user"] = function (target_elf) {
-  if (target_elf === undefined) {
-    console.warn("target elf executable is undefined");
-    return;
-  }
-
-  callMain([target_elf]);
-};
-
 Module["run_system"] = function (cli_param) {
   callMain(cli_param.split(" "));
 };
@@ -22,7 +13,7 @@ Module["onRuntimeInitialized"] = function (target_elf) {
 
   term = new Terminal({
     cols: 120,
-    rows: 25,
+    rows: 11,
   });
   term.open(document.getElementById("terminal"));
 

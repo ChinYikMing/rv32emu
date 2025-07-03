@@ -159,11 +159,11 @@
       </span>
     </span>
 
-    <select id="elfDropdown">
-      <option value="">Select ELF File</option>
-    </select>
-    <button id="runButton">Run ELF</button>
-    <button id="runSysButton">Run System</button>
+    <button id="runSysButton">Run Linux</button>
+
+    <div class="system_desc">
+	    <p>Experience graphics by running doom-riscv, quake, smolnes.</p>
+    </div>
 
     <div class="emscripten">
       <progress value="0" max="100" id="progress" hidden="1"></progress>
@@ -182,50 +182,15 @@
 
     <!--<textarea id="output" rows="8"></textarea>-->
 
-    <script src="elf_list.js"></script>
     <script type="text/javascript">
       var statusElement = document.getElementById("status");
       var progressElement = document.getElementById("progress");
       var spinnerElement = document.getElementById("spinner");
-      var runButton = document.getElementById("runButton");
-      runButton.addEventListener("click", runButtonClickHandler);
       var runSysButton = document.getElementById("runSysButton");
       runSysButton.addEventListener("click", runSysButtonClickHandler);
 
-      var elfDropdown = document.getElementById("elfDropdown");
-      for (var i = 0; i < elfFiles.length; i++) {
-        var option = document.createElement("option");
-        option.value = elfFiles[i];
-        option.textContent = elfFiles[i];
-        elfDropdown.appendChild(option);
-      }
-
-      function runButtonClickHandler() {
-        var selectedElf = document.getElementById("elfDropdown").value;
-        if (selectedElf !== "") {
-          elfHandler(selectedElf);
-          console.log("Running ELF: " + selectedElf);
-        } else {
-          console.warn("Please select an ELF file first.");
-        }
-      }
-
-      function elfHandler(target_elf) {
-        var element = document.getElementById("output");
-        if (element) {
-          element.value += `Running ${target_elf}...\n`;
-          element.scrollTop = element.scrollHeight;
-        }
-        Module._indirect_rv_halt();
-        /* important to add some delay for waiting cancellation of main loop before next run */
-        /* Otherwise, get error: only one main loop can be existed */
-        setTimeout(() => {
-          Module["run_user"](target_elf);
-        }, 1000);
-      }
-
       function runSysButtonClickHandler() {
-        console.log("Running system");
+        console.log("Running Linux");
         Module._indirect_rv_halt();
         /* important to add some delay for waiting cancellation of main loop before next run */
         /* Otherwise, get error: only one main loop can be existed */
@@ -262,9 +227,6 @@
             FS.init(
               // stdin
               null,
-              //() => {
-              //    //return is_cbuffer_avail ? (is_cbuffer_avail = false, Module.HEAPU8[cbuffer_ptr]) : null
-              //},
 
               // stdout
               (c) => {
