@@ -10,7 +10,7 @@ on:
     branches:
       - master
   repository_dispatch:   # listening to rv32emu-prebuilt events
-    types: [deploy_wasm, deploy_system_wasm]
+    types: [deploy_user_wasm, deploy_system_wasm]
 
 jobs:
   wasm-system-deploy:
@@ -24,7 +24,7 @@ jobs:
       - name: install-dependencies
         run: |
               sudo apt-get update -q=2
-              sudo apt-get install -q=2 libsdl2-dev libsdl2-mixer-dev device-tree-compiler
+              sudo apt-get install -q=2 device-tree-compiler
       - name: Verify if the JS or HTML files has been modified
         id: changed-files
         uses: tj-actions/changed-files@v46
@@ -58,11 +58,11 @@ jobs:
         run: |
               make artifact
               # Hack Cloudflare 403 Forbidden on GitHub Runner for Doom artifact download
-              #wget --header="User-Agent: Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:122.0) Gecko/20100101 Firefox/122.0" \
-              #     --header="Referer: https://www.doomworld.com/" \
-              #     --header="Accept-Language: en-US,en;q=0.9" \
-              #     -O build/shareware_doom_iwad.zip \
-              #     "https://www.doomworld.com/3ddownloads/ports/shareware_doom_iwad.zip"
+              wget --header="User-Agent: Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:122.0) Gecko/20100101 Firefox/122.0" \
+                   --header="Referer: https://www.doomworld.com/" \
+                   --header="Accept-Language: en-US,en;q=0.9" \
+                   -O build/shareware_doom_iwad.zip \
+                   "https://www.doomworld.com/3ddownloads/ports/shareware_doom_iwad.zip"
               unzip -d build/ build/shareware_doom_iwad.zip
       - name: build with emcc and move application files to /tmp
         if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
@@ -84,7 +84,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
-          repository: sysprog21/rv32emu-demo
+          repository: ChinYikMing/rv32emu-demo
       - name: Create local changes
         if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
             github.event_name == 'workflow_dispatch' ||
@@ -111,11 +111,11 @@ jobs:
             (github.event_name == 'repository_dispatch' && github.event.action == 'deploy_system_wasm') }}
         uses: ad-m/github-push-action@master
         with:
-          repository: sysprog21/rv32emu-demo
+          repository: ChinYikMing/rv32emu-demo
           github_token: ${{ secrets.RV32EMU_DEMO_TOKEN }}
           branch: main
   wasm-user-deploy:
-    needs: wasm-system-deploy # to run jobs sequentially since two jobs operate on same reposity: rv32emu-demo
+    needs: wasm-system-deploy # run jobs sequentially since two jobs operate on same reposity: rv32emu-demo
     if: always() # ensures wasm-user-deploy runs regardless of the outcome or condition of wasm-system-deploy
     runs-on: ubuntu-latest
     steps:
@@ -139,7 +139,7 @@ jobs:
       - name: install emcc
         if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
             github.event_name == 'workflow_dispatch' ||
-            (github.event_name == 'repository_dispatch' && github.event.action == 'deploy_wasm') }}
+            (github.event_name == 'repository_dispatch' && github.event.action == 'deploy_user_wasm') }}
         run: |
             git clone https://github.com/emscripten-core/emsdk.git
             cd emsdk
@@ -154,16 +154,16 @@ jobs:
         run: |
               make artifact
               # Hack Cloudflare 403 Forbidden on GitHub Runner for Doom artifact download
-              #wget --header="User-Agent: Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:122.0) Gecko/20100101 Firefox/122.0" \
-              #     --header="Referer: https://www.doomworld.com/" \
-              #     --header="Accept-Language: en-US,en;q=0.9" \
-              #     -O build/shareware_doom_iwad.zip \
-              #     "https://www.doomworld.com/3ddownloads/ports/shareware_doom_iwad.zip"
+              wget --header="User-Agent: Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:122.0) Gecko/20100101 Firefox/122.0" \
+                   --header="Referer: https://www.doomworld.com/" \
+                   --header="Accept-Language: en-US,en;q=0.9" \
+                   -O build/shareware_doom_iwad.zip \
+                   "https://www.doomworld.com/3ddownloads/ports/shareware_doom_iwad.zip"
               unzip -d build/ build/shareware_doom_iwad.zip
       - name: build with emcc and move application files to /tmp
         if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
             github.event_name == 'workflow_dispatch' ||
-            (github.event_name == 'repository_dispatch' && github.event.action == 'deploy_wasm') }}
+            (github.event_name == 'repository_dispatch' && github.event.action == 'deploy_user_wasm') }}
         run: |
             make CC=emcc ENABLE_SDL=1
             mkdir /tmp/rv32emu-demo
@@ -177,15 +177,15 @@ jobs:
       - name: Check out the rv32emu-demo repo
         if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
             github.event_name == 'workflow_dispatch' ||
-            (github.event_name == 'repository_dispatch' && github.event.action == 'deploy_wasm') }}
+            (github.event_name == 'repository_dispatch' && github.event.action == 'deploy_user_wasm') }}
         uses: actions/checkout@v4
         with:
           persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
-          repository: sysprog21/rv32emu-demo
+          repository: ChinYikMing/rv32emu-demo
       - name: Create local changes
         if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
             github.event_name == 'workflow_dispatch' ||
-            (github.event_name == 'repository_dispatch' && github.event.action == 'deploy_wasm') }}
+            (github.event_name == 'repository_dispatch' && github.event.action == 'deploy_user_wasm') }}
         run: |
             mv /tmp/rv32emu-demo/index.html .
             mv /tmp/rv32emu-demo/coi-serviceworker.min.js .
@@ -196,7 +196,7 @@ jobs:
       - name: Commit files
         if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
             github.event_name == 'workflow_dispatch' ||
-            (github.event_name == 'repository_dispatch' && github.event.action == 'deploy_wasm') }}
+            (github.event_name == 'repository_dispatch' && github.event.action == 'deploy_user_wasm') }}
         run: |
             git config --local user.email "github-actions[bot]@users.noreply.github.com"
             git config --local user.name "github-actions[bot]"
@@ -205,9 +205,9 @@ jobs:
       - name: Push changes
         if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
             github.event_name == 'workflow_dispatch' ||
-            (github.event_name == 'repository_dispatch' && github.event.action == 'deploy_wasm') }}
+            (github.event_name == 'repository_dispatch' && github.event.action == 'deploy_user_wasm') }}
         uses: ad-m/github-push-action@master
         with:
-          repository: sysprog21/rv32emu-demo
+          repository: ChinYikMing/rv32emu-demo
           github_token: ${{ secrets.RV32EMU_DEMO_TOKEN }}
           branch: main
