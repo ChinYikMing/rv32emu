@@ -57,12 +57,7 @@ jobs:
       - name: fetch artifact
         run: |
               make artifact
-              # Hack Cloudflare 403 Forbidden on GitHub Runner for Doom artifact download
-              wget --header="User-Agent: Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:122.0) Gecko/20100101 Firefox/122.0" \
-                   --header="Referer: https://www.doomworld.com/" \
-                   --header="Accept-Language: en-US,en;q=0.9" \
-                   -O build/shareware_doom_iwad.zip \
-                   "https://www.doomworld.com/3ddownloads/ports/shareware_doom_iwad.zip"
+              wget -O shareware_doom_iwad.zip "https://raw.githubusercontent.com/sysprog21/rv32emu-prebuilt/doom-artifact/shareware_doom_iwad.zip"
               unzip -d build/ build/shareware_doom_iwad.zip
       - name: build with emcc and move application files to /tmp
         if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
@@ -153,12 +148,7 @@ jobs:
       - name: fetch artifact
         run: |
               make artifact
-              # Hack Cloudflare 403 Forbidden on GitHub Runner for Doom artifact download
-              wget --header="User-Agent: Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:122.0) Gecko/20100101 Firefox/122.0" \
-                   --header="Referer: https://www.doomworld.com/" \
-                   --header="Accept-Language: en-US,en;q=0.9" \
-                   -O build/shareware_doom_iwad.zip \
-                   "https://www.doomworld.com/3ddownloads/ports/shareware_doom_iwad.zip"
+              wget -O shareware_doom_iwad.zip "https://raw.githubusercontent.com/sysprog21/rv32emu-prebuilt/doom-artifact/shareware_doom_iwad.zip"
               unzip -d build/ build/shareware_doom_iwad.zip
       - name: build with emcc and move application files to /tmp
         if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
