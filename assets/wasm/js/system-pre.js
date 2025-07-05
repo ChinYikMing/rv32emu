@@ -7,7 +7,7 @@ Module["run_system"] = function (cli_param) {
 // index.html's preRun needs to access this, thus declaring as global
 let term;
 
-Module["onRuntimeInitialized"] = function (target_elf) {
+Module["onRuntimeInitialized"] = function () {
   const input_buf_ptr = Module._get_input_buf();
   const input_buf_cap = Module._get_input_buf_cap();
 
