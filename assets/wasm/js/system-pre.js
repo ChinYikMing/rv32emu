@@ -59,7 +59,6 @@ Module["onRuntimeInitialized"] = function () {
     }
 
     Module._set_input_buf_size(sequence.length);
-    Module._set_input_buf_avail(true);
 
     term.scrollToBottom();
   });

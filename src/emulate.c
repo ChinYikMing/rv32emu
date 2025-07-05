@@ -14,7 +14,7 @@
 #include <emscripten.h>
 
 #if RV32_HAS(SYSTEM)
-extern bool is_input_buf_avail;
+extern uint8_t input_buf_size;
 EM_JS(void, enable_run_button, (),
       { document.getElementById('runSysButton').disabled = false; });
 #else
@@ -1019,7 +1019,7 @@ static void rv_check_interrupt(riscv_t *rv)
         peripheral_update_ctr = 64;
 
 #if defined(__EMSCRIPTEN__)
-    escape:
+    escape_seq:
 #endif
         u8250_check_ready(PRIV(rv)->uart);
         if (PRIV(rv)->uart->in_ready)
@@ -1044,9 +1044,9 @@ static void rv_check_interrupt(riscv_t *rv)
         case (SUPERVISOR_EXTERNAL_INTR & 0xf):
             SET_CAUSE_AND_TVAL_THEN_TRAP(rv, SUPERVISOR_EXTERNAL_INTR, 0);
 #if defined(__EMSCRIPTEN__)
-            /* escape character has more than 1 byte */
-            if (is_input_buf_avail)
-                goto escape;
+            /* escape sequence has more than 1 byte */
+            if (input_buf_size)
+                goto escape_seq;
 #endif
             break;
         default:

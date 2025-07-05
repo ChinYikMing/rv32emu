@@ -40,12 +40,11 @@ void u8250_update_interrupts(u8250_state_t *uart)
 
 #if defined(__EMSCRIPTEN__)
 
-#define INPUT_BUF_MAX_CAP 128
+#define INPUT_BUF_MAX_CAP 16
 
 static char input_buf[INPUT_BUF_MAX_CAP];
-static uint8_t input_buf_size;
 static uint8_t input_buf_start = 0;
-bool is_input_buf_avail = false;
+uint8_t input_buf_size;
 
 char *get_input_buf()
 {
@@ -55,11 +54,6 @@ char *get_input_buf()
 uint8_t get_input_buf_cap()
 {
     return INPUT_BUF_MAX_CAP;
-}
-
-void set_input_buf_avail(bool flag)
-{
-    is_input_buf_avail = flag;
 }
 
 void set_input_buf_size(uint8_t size)
@@ -75,7 +69,7 @@ void u8250_check_ready(u8250_state_t *uart)
         return;
 
 #if defined(__EMSCRIPTEN__)
-    if (is_input_buf_avail)
+    if (input_buf_size)
         uart->in_ready = true;
 #else
     struct pollfd pfd = {uart->in_fd, POLLIN, 0};
@@ -104,7 +98,7 @@ static uint8_t u8250_handle_in(u8250_state_t *uart)
     input_buf_start++;
     if (--input_buf_size == 0) {
         input_buf_start = 0;
-        set_input_buf_avail(false);
+        //set_input_buf_avail(false);
     }
 #else
     if (read(uart->in_fd, &value, 1) < 0)
