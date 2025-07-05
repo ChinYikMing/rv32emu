@@ -161,6 +161,10 @@
 
     <button id="runSysButton">Run Linux</button>
 
+    <button id="toUserEmuButton">
+      🚀 Navigate to User Emulation
+    </button>
+
     <div class="system_desc">
 	    <p>Experience graphics and sounds(remember to turn on your speaker) by running doom-riscv, quake, smolnes.</p>
     </div>
@@ -186,6 +190,13 @@
       var spinnerElement = document.getElementById("spinner");
       var runSysButton = document.getElementById("runSysButton");
       runSysButton.addEventListener("click", runSysButtonClickHandler);
+      var toUserEmuButton = document.getElementById("toUserEmuButton");
+      toUserEmuButton.addEventListener("click", toUserEmuButtonClickHandler);
+
+      function toUserEmuButtonClickHandler() {
+        console.log("Navigate to user emulation");
+	window.location.href = "/"
+      }
 
       function runSysButtonClickHandler() {
         console.log("Running Linux");
