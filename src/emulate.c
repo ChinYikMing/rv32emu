@@ -12,6 +12,15 @@
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten.h>
+
+#if RV32_HAS(SYSTEM)
+extern bool is_input_buf_avail;
+EM_JS(void, enable_run_button, (),
+      { document.getElementById('runSysButton').disabled = false; });
+#else
+EM_JS(void, enable_run_button, (),
+      { document.getElementById('runButton').disabled = false; });
+#endif
 #endif
 
 #if RV32_HAS(EXT_F)
@@ -1003,10 +1012,6 @@ static bool rv_has_plic_trap(riscv_t *rv)
             (rv->csr_sip & rv->csr_sie));
 }
 
-#if defined(__EMSCRIPTEN__)
-extern bool is_input_buf_avail;
-#endif
-
 static void rv_check_interrupt(riscv_t *rv)
 {
     vm_attr_t *attr = PRIV(rv);
@@ -1186,6 +1191,7 @@ void rv_step(void *arg)
         emscripten_cancel_main_loop();
         rv_delete(rv); /* clean up and reuse memory */
         rv_log_info("RISC-V emulator is destroyed");
+        enable_run_button();
     }
 #endif
 }

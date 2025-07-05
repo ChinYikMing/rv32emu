@@ -11,6 +11,10 @@
 #include <string.h>
 #include <unistd.h>
 
+#if defined(__EMSCRIPTEN__)
+#include <emscripten.h>
+#endif
+
 #include "elf.h"
 #include "riscv.h"
 #include "utils.h"
@@ -235,6 +239,14 @@ void indirect_rv_halt()
 {
     rv_halt(rv);
 }
+
+#if RV32_HAS(SYSTEM)
+EM_JS(void, disable_run_button, (),
+      { document.getElementById('runSysButton').disabled = true; });
+#else
+EM_JS(void, disable_run_button, (),
+      { document.getElementById('runButton').disabled = true; });
+#endif
 #endif
 
 int main(int argc, char **args)
@@ -285,6 +297,10 @@ int main(int argc, char **args)
         goto end;
     }
     rv_log_info("RISC-V emulator is created and ready to run");
+
+#if defined(__EMSCRIPTEN__)
+    disable_run_button();
+#endif
 
     rv_run(rv);
 
