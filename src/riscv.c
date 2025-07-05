@@ -234,8 +234,8 @@ static void map_file(char **ram_loc, const char *name)
     struct stat st;
     fstat(fd, &st);
 
-// EMSCRIPTEN: We don't currently support location hints for the address of the mapping
-// https://github.com/emscripten-core/emscripten/blob/52bc455316b2f44d3a94104776a335a5861ad73b/system/lib/libc/emscripten_mmap.c#L105
+/* EMSCRIPTEN: We don't currently support location hints for the address of the mapping */
+/* https://github.com/emscripten-core/emscripten/blob/52bc455316b2f44d3a94104776a335a5861ad73b/system/lib/libc/emscripten_mmap.c#L105 */
 #if HAVE_MMAP && !defined(__EMSCRIPTEN__)
     /* remap to a memory region */
     *ram_loc = mmap(*ram_loc, st.st_size, PROT_READ | PROT_WRITE,
