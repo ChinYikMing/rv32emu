@@ -56,7 +56,7 @@ jobs:
         run: |
               make artifact
               # get from rv32emu-prebuilt
-              wget -O build/shareware_doom_iwad.zip "https://raw.githubusercontent.com/ChinYikMing/rv32emu-prebuilt/doom-artifact/shareware_doom_iwad.zip"
+              wget -O build/shareware_doom_iwad.zip "https://raw.githubusercontent.com/sysprog21/rv32emu-prebuilt/doom-artifact/shareware_doom_iwad.zip"
               unzip -d build/ build/shareware_doom_iwad.zip
       - name: build with emcc and move application files to /tmp
         if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
@@ -146,7 +146,7 @@ jobs:
         run: |
               make artifact
               # get from rv32emu-prebuilt
-              wget -O build/shareware_doom_iwad.zip "https://raw.githubusercontent.com/ChinYikMing/rv32emu-prebuilt/doom-artifact/shareware_doom_iwad.zip"
+              wget -O build/shareware_doom_iwad.zip "https://raw.githubusercontent.com/sysprog21/rv32emu-prebuilt/doom-artifact/shareware_doom_iwad.zip"
               unzip -d build/ build/shareware_doom_iwad.zip
       - name: build with emcc and move application files to /tmp
         if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
