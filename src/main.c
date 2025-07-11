@@ -61,6 +61,7 @@ static char *opt_kernel_img;
 static char *opt_rootfs_img;
 static char *opt_bootargs;
 static char *opt_virtio_blk_img;
+static char *opt_virtio_vsock_cid;
 #endif
 
 static void print_usage(const char *filename)
@@ -80,6 +81,7 @@ static void print_usage(const char *filename)
         "  -i <image> : use <image> as rootfs\n"
         "  -x vblk:<image>[,readonly] : use <image> as virtio-blk disk image "
         "(default read and write)\n"
+        "  -x vsock:<cid> : use <cid> as the context ID\n"
         "  -b <bootargs> : use customized <bootargs> for the kernel\n"
 #endif
         "  -d [filename]: dump registers as JSON to the "
@@ -128,6 +130,8 @@ static bool parse_args(int argc, char **args)
         case 'x':
             if (!strncmp("vblk:", optarg, 5))
                 opt_virtio_blk_img = optarg + 5; /* strlen("vblk:") */
+	    else if (!strncmp("vsock:", optarg, 6))
+                opt_virtio_vsock_cid = optarg + 6; /* strlen("vsock:") */
             else
                 return false;
             emu_argc++;
@@ -274,6 +278,7 @@ int main(int argc, char **args)
     attr.data.system.initrd = opt_rootfs_img;
     attr.data.system.bootargs = opt_bootargs;
     attr.data.system.vblk_device = opt_virtio_blk_img;
+    attr.data.system.vsock_device = opt_virtio_vsock_cid;
 #else
     attr.data.user.elf_program = opt_prog_name;
 #endif

@@ -28,6 +28,16 @@ void emu_update_vblk_interrupts(riscv_t *rv)
         attr->plic->active &= ~IRQ_VBLK_BIT;
     plic_update_interrupts(attr->plic);
 }
+
+void emu_update_vsock_interrupts(riscv_t *rv)
+{
+    vm_attr_t *attr = PRIV(rv);
+    if (attr->vsock->interrupt_status)
+        attr->plic->active |= IRQ_VSOCK_BIT;
+    else
+        attr->plic->active &= ~IRQ_VSOCK_BIT;
+    plic_update_interrupts(attr->plic);
+}
 #endif
 
 static bool ppn_is_valid(riscv_t *rv, uint32_t ppn)

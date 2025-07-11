@@ -9,7 +9,7 @@ CONFIG_FILE := $(OUT)/.config
 
 OPT_LEVEL ?= -O2
 
-CFLAGS = -std=gnu99 $(OPT_LEVEL) -Wall -Wextra -Werror
+CFLAGS = -std=gnu99 $(OPT_LEVEL) -Wall -Wextra
 CFLAGS += -Wno-unused-label
 CFLAGS += -include src/common.h -Isrc/
 

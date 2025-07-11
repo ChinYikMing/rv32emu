@@ -8,7 +8,7 @@
 #define VIRTIO_VENDOR_ID 0x12345678
 #define VIRTIO_MAGIC_NUMBER 0x74726976
 #define VIRTIO_VERSION 2
-#define VIRTIO_CONFIG_GENERATE 0
+#define VIRTIO_CONFIG_GENERATION 0
 
 #define VIRTIO_STATUS_DRIVER_OK 4
 #define VIRTIO_STATUS_DEVICE_NEEDS_RESET 64
@@ -86,7 +86,7 @@ typedef struct {
     uint32_t queue_used;
     uint16_t last_avail;
     bool ready;
-} virtio_blk_queue_t;
+} virtio_queue_t;
 
 typedef struct {
     /* feature negotiation */
@@ -96,7 +96,7 @@ typedef struct {
     uint32_t driver_features_sel;
     /* queue config */
     uint32_t queue_sel;
-    virtio_blk_queue_t queues[2];
+    virtio_queue_t queues[2];
     /* status */
     uint32_t status;
     uint32_t interrupt_status;
@@ -120,3 +120,78 @@ uint32_t *virtio_blk_init(virtio_blk_state_t *vblk,
 virtio_blk_state_t *vblk_new();
 
 void vblk_delete(virtio_blk_state_t *vblk);
+
+/*--------------------------------- VirtIO vsock ----------------------------*/
+
+#define VIRTIO_VSOCK_DEV_ID 19
+
+typedef struct {
+    /* feature negotiation */
+    uint32_t device_features;
+    uint32_t device_features_sel;
+    uint32_t driver_features;
+    uint32_t driver_features_sel;
+    /* queue config */
+    uint32_t queue_sel;
+    /* RX, TX, Event */
+    virtio_queue_t queues[3];
+    /* status */
+    uint32_t status;
+    uint32_t interrupt_status;
+    /* supplied by environment */
+    uint32_t *ram;
+    uint64_t cid;  /* context ID */
+    int port;
+    int peer_port;
+    int socket;
+    uint8_t recv_buf[1024];
+    uint32_t peer_free;
+    uint32_t tx_cnt;
+    uint32_t pending_cnt;
+    /* implementation-specific */
+    void *priv;
+} virtio_vsock_state_t;
+
+#define IRQ_VSOCK_SHIFT 4
+#define IRQ_VSOCK_BIT (1 << IRQ_VSOCK_SHIFT)
+
+#define VIRTIO_VSOCK_F_STREAM 1
+#define VIRTIO_VSOCK_F_SEQPACKET (1 << 1)
+#define VIRTIO_VSOCK_F_NO_IMPLIED_STREAM (1 << 2)
+
+#define VIRTIO_VSOCK_OP_INVALID        0
+/* Connect operations */
+#define VIRTIO_VSOCK_OP_REQUEST        1
+#define VIRTIO_VSOCK_OP_RESPONSE       2
+#define VIRTIO_VSOCK_OP_RST            3
+#define VIRTIO_VSOCK_OP_SHUTDOWN       4
+/* To send payload */
+#define VIRTIO_VSOCK_OP_RW             5
+/* Tell the peer our credit info */
+#define VIRTIO_VSOCK_OP_CREDIT_UPDATE  6
+/* Request the peer to send the credit info to us */
+#define VIRTIO_VSOCK_OP_CREDIT_REQUEST 7
+
+#define VIRTIO_VSOCK_TYPE_STREAM    1
+#define VIRTIO_VSOCK_TYPE_SEQPACKET 2
+
+/*
+ * For VIRTIO_VSOCK_OP_SHUTDOWN operation, these hints are stored in field 'flags' in virtio_vsock_hdr.
+ * These hints are permanent once sent and successive packets with bits clear do not reset them.
+ */
+#define VIRTIO_VSOCK_SHUTDOWN_F_RECEIVE 0
+#define VIRTIO_VSOCK_SHUTDOWN_F_SEND    1
+
+void virtio_vsock_recv(virtio_vsock_state_t *vsock);
+
+uint32_t virtio_vsock_read(virtio_vsock_state_t *vsock, uint32_t addr);
+
+void virtio_vsock_write(virtio_vsock_state_t *vsock,
+                        uint32_t addr,
+                        uint32_t value);
+
+void virtio_vsock_init(virtio_vsock_state_t *vsock, uint64_t cid);
+
+virtio_vsock_state_t *vsock_new();
+
+void vsock_delete(virtio_vsock_state_t *vsock);
