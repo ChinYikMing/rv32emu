@@ -1015,6 +1015,9 @@ static void rv_check_interrupt(riscv_t *rv)
         u8250_check_ready(PRIV(rv)->uart);
         if (PRIV(rv)->uart->in_ready)
             emu_update_uart_interrupts(rv);
+
+        if (PRIV(rv)->vsock->interrupt_status)
+            emu_update_vsock_interrupts(rv);
     }
 
     if (rv->timer > attr->timer)
@@ -1063,6 +1066,30 @@ void rv_step(void *arg)
 #if RV32_HAS(SYSTEM) && !RV32_HAS(ELF_LOADER)
         /* check for any interrupt after every block emulation */
         rv_check_interrupt(rv);
+#endif
+
+#if defined(__linux__) && RV32_HAS(SYSTEM) && !RV32_HAS(ELF_LOADER)
+        /*
+         * Polling the vsock->socket.
+         *
+         * The guest OS has no way to know when the host OS has data ready,
+         * unless it keeps polling. This is where vhost_vsock helps. By loading
+         * vhost_vsock kernel module and using some ioctl() calls, the host OS
+         * can access the guest OS's virtio-vsock memory. Then, when the host
+         * wants to send data, the host kernel updates the guest's virtqueue and
+         * notifies (kicks) the guest OS. TODO: Leverage this once vhost_vsock
+         * is supported.
+	 *
+	 * Note: vhost_vsock is only available when KVM is available on the host?
+	 *       Because, the ioeventfd is binding between KVM and vhost-vsock in
+	 *       the host kernel. Thus, other solution like backend thread polling
+	 *       the vsock packet or current approach is a better way.
+	 *       See https://nxw.name/2022/virtio-networking-virtio-net-vhost-net
+	 *       The diagram in the link is clear.
+         */
+        extern void virtio_vsock_recv(virtio_vsock_state_t * vsock);
+        if (PRIV(rv)->vsock->socket != -1)
+            virtio_vsock_recv(PRIV(rv)->vsock);
 #endif
 
         if (prev && prev->pc_start != last_pc) {

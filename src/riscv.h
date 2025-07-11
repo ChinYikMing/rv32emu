@@ -462,6 +462,7 @@ typedef struct {
     char *initrd;
     char *bootargs;
     char *vblk_device;
+    char *vsock_device;
 } vm_system_t;
 #endif /* RV32_HAS(SYSTEM) */
 
@@ -485,6 +486,9 @@ typedef struct {
     /* virtio-blk device */
     uint32_t *disk;
     virtio_blk_state_t *vblk;
+
+    /* virtio vsock device */
+    virtio_vsock_state_t *vsock;
 #endif /* RV32_HAS(SYSTEM) && !RV32_HAS(ELF_LOADER) */
 
     /* vm memory object */

@@ -148,7 +148,7 @@ static void virtio_blk_read_handler(virtio_blk_state_t *vblk,
 }
 
 static int virtio_blk_desc_handler(virtio_blk_state_t *vblk,
-                                   const virtio_blk_queue_t *queue,
+                                   const virtio_queue_t *queue,
                                    uint16_t desc_idx,
                                    uint32_t *plen)
 {
@@ -231,7 +231,7 @@ static int virtio_blk_desc_handler(virtio_blk_state_t *vblk,
 static void virtio_queue_notify_handler(virtio_blk_state_t *vblk, int index)
 {
     uint32_t *ram = vblk->ram;
-    virtio_blk_queue_t *queue = &vblk->queues[index];
+    virtio_queue_t *queue = &vblk->queues[index];
     if (vblk->status & VIRTIO_STATUS_DEVICE_NEEDS_RESET)
         return;
 
@@ -317,7 +317,7 @@ uint32_t virtio_blk_read(virtio_blk_state_t *vblk, uint32_t addr)
     case _(Status):
         return vblk->status;
     case _(ConfigGeneration):
-        return VIRTIO_CONFIG_GENERATE;
+        return VIRTIO_CONFIG_GENERATION;
     default:
         /* Read configuration from the corresponding register */
         return ((uint32_t *) VBLK_PRIV(vblk))[addr - _(Config)];

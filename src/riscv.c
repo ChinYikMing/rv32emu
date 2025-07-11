@@ -294,10 +294,11 @@ static void load_dtb(char **ram_loc, vm_attr_t *attr)
 #include "minimal_dtb.h"
     char *bootargs = attr->data.system.bootargs;
     char *vblk = attr->data.system.vblk_device;
+    char *vsock = attr->data.system.vsock_device;
     char *blob = *ram_loc;
     char *buf;
     size_t len;
-    int node, err;
+    int node, subnode, err;
     int totalsize;
 
     memcpy(blob, minimal, sizeof(minimal));
@@ -322,11 +323,21 @@ static void load_dtb(char **ram_loc, vm_attr_t *attr)
 
     /* remove the vblk node from soc if it is not specified */
     if (!vblk) {
-        int subnode;
         node = fdt_path_offset(blob, "/soc@F0000000");
         assert(node >= 0);
 
         subnode = fdt_subnode_offset(blob, node, "virtio@4200000");
+        assert(subnode >= 0);
+
+        assert(fdt_del_node(blob, subnode) == 0);
+    }
+
+    /* remove the vsock node from soc if it is not specified */
+    if (!vsock) {
+        node = fdt_path_offset(blob, "/soc@F0000000");
+        assert(node >= 0);
+
+        subnode = fdt_subnode_offset(blob, node, "virtio@4300000");
         assert(subnode >= 0);
 
         assert(fdt_del_node(blob, subnode) == 0);
@@ -473,6 +484,7 @@ riscv_t *rv_create(riscv_user_t rv_attr)
                        },
                        3);
 
+    /* set the log level to TRACE, everything is captured */
     rv_log_set_level(attr->log_level);
     rv_log_info("Log level: %s", rv_log_level_string(attr->log_level));
 
@@ -588,6 +600,24 @@ riscv_t *rv_create(riscv_user_t rv_attr)
     assert(attr->uart);
     attr->uart->in_fd = attr->fd_stdin;
     attr->uart->out_fd = attr->fd_stdout;
+
+    /* setup virtio vsock */
+    attr->vsock = NULL;
+    if (attr->data.system.vsock_device) {
+// FIXME: apply platform check when goto upstream
+#if !defined(__linux__)
+       rv_log_error("VirtIO vsock is not supported on non Linux
+       platform"); exit(EXIT_FAILURE);
+#else
+        uint64_t cid = strtoll(attr->data.system.vsock_device, NULL, 10);
+
+        attr->vsock = vsock_new();
+        attr->vsock->socket = -1;
+        attr->vsock->tx_cnt = 0;
+        attr->vsock->ram = (uint32_t *) attr->mem->mem_base;
+        virtio_vsock_init(attr->vsock, cid);
+#endif /* !defined(__linux__) */
+    }
 
     /* setup virtio-blk */
     attr->vblk = NULL;

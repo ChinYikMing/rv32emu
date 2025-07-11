@@ -71,5 +71,11 @@
             reg = <0x4200000 0x200>;
             interrupts = <3>;
         };
+
+        vsock0: virtio@4300000 {
+            compatible = "virtio,mmio";
+            reg = <0x4300000 0x200>;
+            interrupts = <4>;
+        };
     };
 };
