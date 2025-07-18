@@ -703,6 +703,7 @@ void rv_run(riscv_t *rv)
 #endif
     );
 
+    rv_log_info("rv_run");
     if (!(attr->run_flag & (RV_RUN_TRACE | RV_RUN_GDBSTUB))) {
 #ifdef __EMSCRIPTEN__
         emscripten_set_main_loop_arg(rv_step, (void *) rv, 0, 1);
