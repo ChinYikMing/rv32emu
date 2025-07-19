@@ -46,10 +46,13 @@ static char *opt_prog_name;
 /* target argc and argv */
 static int prog_argc;
 static char **prog_args;
-static const char *optstr = "tgqmhpd:a:k:i:b:x:";
+static const char *optstr = "tgqmhpvd:a:k:i:b:x:";
 
 /* enable misaligned memory access */
 static bool opt_misaligned = false;
+
+/* show version */
+static bool opt_version = false;
 
 /* dump profiling data */
 static bool opt_prof_data = false;
@@ -89,8 +92,40 @@ static void print_usage(const char *filename)
         "required by arch-test test\n"
         "  -m : enable misaligned memory access\n"
         "  -p : generate profiling data\n"
+        "  -v : show version information and exit\n"
         "  -h : show this message",
         filename);
+}
+
+static void show_version()
+{
+    FILE *f = fopen("VERSION", "r");
+    if (!f) {
+        perror("Failed to open VERSION file");
+        exit(EXIT_FAILURE);
+    }
+
+    char version[128];
+    if (!fgets(version, sizeof(version), f)) {
+        perror("Failed to read VERSION");
+        fclose(f);
+        exit(EXIT_FAILURE);
+    }
+
+    fclose(f);
+
+    /* Remove trailing newline if present */
+    char *newline = version;
+    while (*newline) {
+        if (*newline == '\n') {
+            *newline = '\0';
+            break;
+        }
+        newline++;
+    }
+
+    printf("rv32emu version %s\n", version);
+    exit(EXIT_SUCCESS);
 }
 
 static bool parse_args(int argc, char **args)
@@ -154,6 +189,9 @@ static bool parse_args(int argc, char **args)
             signature_out_file = optarg;
             emu_argc++;
             break;
+        case 'v':
+            opt_version = true;
+            break;
         default:
             return false;
         }
@@ -165,6 +203,9 @@ static bool parse_args(int argc, char **args)
      */
     prog_args = &args[optind];
     opt_prog_name = prog_args[0];
+
+    if (opt_version)
+        show_version();
 
     if (opt_prof_data) {
         char cwd_path[PATH_MAX] = {0};
