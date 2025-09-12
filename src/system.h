@@ -25,6 +25,7 @@ enum SUPPORTED_MMIO {
     MMIO_PLIC,
     MMIO_UART,
     MMIO_VIRTIOBLK,
+    MMIO_RTC,
 };
 
 /* clang-format off */
@@ -63,6 +64,17 @@ enum SUPPORTED_MMIO {
                 return;                                                          \
             )                                                                    \
             break;                                                               \
+        case MMIO_RTC:                                                     \
+            IIF(rw)( /* read */                                                  \
+                mmio_read_val = rtc_read(PRIV(rv)->rtc, addr & 0xFFFFF); \
+                emu_update_rtc_interrupts(rv);                                  \
+                return mmio_read_val;                                            \
+                ,    /* write */                                                 \
+                rtc_write(PRIV(rv)->rtc, addr & 0xFFFFF, val);           \
+                emu_update_rtc_interrupts(rv);                                  \
+                return;                                                          \
+            )                                                                    \
+            break;                                                               \
         default:                                                                 \
             rv_log_error("unknown MMIO type %d\n", io);                          \
             break;                                                               \
@@ -84,6 +96,9 @@ enum SUPPORTED_MMIO {
                 break;                                      \
             case 0x42: /* Virtio-blk */                     \
                 MMIO_OP(MMIO_VIRTIOBLK, MMIO_R);            \
+                break;                                      \
+            case 0x43: /* RTC */                            \
+                MMIO_OP(MMIO_RTC, MMIO_R);                  \
                 break;                                      \
             default:                                        \
                 __UNREACHABLE;                              \
@@ -107,6 +122,9 @@ enum SUPPORTED_MMIO {
             case 0x42: /* Virtio-blk */                     \
                 MMIO_OP(MMIO_VIRTIOBLK, MMIO_W);            \
                 break;                                      \
+            case 0x43: /* RTC */                            \
+                MMIO_OP(MMIO_RTC, MMIO_W);                  \
+                break;                                      \
             default:                                        \
                 __UNREACHABLE;                              \
                 break;                                      \
@@ -116,6 +134,7 @@ enum SUPPORTED_MMIO {
 
 void emu_update_uart_interrupts(riscv_t *rv);
 void emu_update_vblk_interrupts(riscv_t *rv);
+void emu_update_rtc_interrupts(riscv_t *rv);
 
 /*
  * Linux kernel might create signal frame when returning from trap

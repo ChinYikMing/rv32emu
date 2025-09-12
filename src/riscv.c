@@ -589,6 +589,9 @@ riscv_t *rv_create(riscv_user_t rv_attr)
     attr->uart->in_fd = attr->fd_stdin;
     attr->uart->out_fd = attr->fd_stdout;
 
+    /* setup rtc */
+    attr->rtc = rtc_new();
+
     /* setup virtio-blk */
     attr->vblk = NULL;
     if (attr->data.system.vblk_device) {
@@ -761,6 +764,7 @@ void rv_delete(riscv_t *rv)
 #if RV32_HAS(SYSTEM) && !RV32_HAS(ELF_LOADER)
     u8250_delete(attr->uart);
     plic_delete(attr->plic);
+    rtc_delete(attr->rtc);
     /* sync device, cleanup inside the callee */
     rv_fsync_device();
 #endif

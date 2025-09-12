@@ -71,5 +71,12 @@
             reg = <0x4200000 0x200>;
             interrupts = <3>;
         };
+
+        rtc0: rtc@4300000 {
+            compatible = "google,goldfish-rtc";
+            reg = <0x4300000 0x1000>;
+            interrupts = <4>;
+            interrupt-parent = <&plic0>;
+        };
     };
 };
