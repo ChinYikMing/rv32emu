@@ -33,6 +33,8 @@ OPTS_BASE+=" -i build/linux-image/rootfs.cpio"
 TEST_OPTIONS=("base (${OPTS_BASE})")
 EXPECT_CMDS=('
     expect "buildroot login:" { send "root\n" } timeout { exit 1 }
+    expect "# " { send "dmesg | grep rtc\n" } timeout { exit 2 }
+    expect "rtc0" { } timeout { exit 3 }
     expect "# " { send "uname -a\n" } timeout { exit 2 }
     expect "riscv32 GNU/Linux" { send "\x01"; send "x" } timeout { exit 3 }
 ')
@@ -54,6 +56,8 @@ if [ "${ENABLE_VBLK}" -eq "1" ]; then
     TEST_OPTIONS+=("${OPTS_BASE} -x vblk:${VBLK_IMG},readonly")
     EXPECT_CMDS+=('
         expect "buildroot login:" { send "root\n" } timeout { exit 1 }
+        expect "# " { send "dmesg | grep rtc\n" } timeout { exit 2 }
+        expect "rtc0" { } timeout { exit 3 }
         expect "# " { send "uname -a\n" } timeout { exit 2 }
         expect "riscv32 GNU/Linux" { send "mkdir mnt && mount /dev/vda mnt\n" } timeout { exit 3 }
         expect "# " { send "echo rv32emu > mnt/emu.txt\n" } timeout { exit 3 }
@@ -65,6 +69,8 @@ if [ "${ENABLE_VBLK}" -eq "1" ]; then
     TEST_OPTIONS+=("${OPTS_BASE} -x vblk:${VBLK_IMG}")
     VBLK_EXPECT_CMDS='
         expect "buildroot login:" { send "root\n" } timeout { exit 1 }
+        expect "# " { send "dmesg | grep rtc\n" } timeout { exit 2 }
+        expect "rtc0" { } timeout { exit 3 }
         expect "# " { send "uname -a\n" } timeout { exit 2 }
         expect "riscv32 GNU/Linux" { send "mkdir mnt && mount /dev/vda mnt\n" } timeout { exit 3 }
         expect "# " { send "echo rv32emu > mnt/emu.txt\n" } timeout { exit 3 }
