@@ -292,6 +292,7 @@ static char *realloc_property(char *fdt,
 static void load_dtb(char **ram_loc, vm_attr_t *attr)
 {
 #include "minimal_dtb.h"
+    const char *real_bootargs = NULL;
     char *bootargs = attr->data.system.bootargs;
     char **vblk = attr->data.system.vblk_device;
     char *blob = *ram_loc;
@@ -300,7 +301,7 @@ static void load_dtb(char **ram_loc, vm_attr_t *attr)
     int node, err;
     int totalsize;
 
-#define DTB_EXPAND_SIZE 1024 /* or more if needed */
+#define DTB_EXPAND_SIZE (8192 << 1) /* or more if needed */
 
     /* Allocate enough memory for DTB + extra room */
     size_t minimal_len = ARRAY_SIZE(minimal);
@@ -323,6 +324,7 @@ static void load_dtb(char **ram_loc, vm_attr_t *attr)
         assert(buf);
         memcpy(buf, bootargs, len);
         buf[len] = 0;
+
         err = fdt_setprop(dtb_buf, node, "bootargs", buf, len + 1);
         if (err == -FDT_ERR_NOSPACE) {
             dtb_buf = realloc_property(dtb_buf, node, "bootargs", len);
@@ -331,6 +333,51 @@ static void load_dtb(char **ram_loc, vm_attr_t *attr)
         free(buf);
         assert(!err);
     }
+
+    if (bootargs) {
+        real_bootargs = bootargs;
+    } else {
+        /* bootargs in device tree */
+        node = fdt_path_offset(dtb_buf, "/chosen");
+        assert(node > 0);
+        real_bootargs = (char *) fdt_getprop(dtb_buf, node, "bootargs", NULL);
+        assert(real_bootargs);
+    }
+
+    /*
+     */
+    const char *root_disk_str = "root=/dev/vd";
+    char *root_disk = strstr(real_bootargs, root_disk_str);
+    if (root_disk) {
+        root_disk += strlen(root_disk_str);
+
+        /*
+         * Determine the last character of the root block device name.
+         *
+         * Device names follow the sequence:
+         *   /dev/vda, /dev/vdb, ... /dev/vdz
+         *   /dev/vdaa, /dev/vdab, ... /dev/vdad
+         * By adding an offset to the base name, the last character can be
+         * obtained.
+         *
+         * Maximum virtio block devices = 30 due to the 32-bit PLIC IRQ mask:
+         *   - IRQ 1 is reserved for the serial device
+         *     (see src/devices/minimal.dts)
+         *   - IRQs 2–31 are available for virtio blocks
+         *     So, /dev/vdad is the last valid virtio block
+         */
+        const size_t root_disk_len = strlen(root_disk);
+        root_disk += (root_disk_len - 1);
+        rv_log_warn("strlen(root_disk): %zu", root_disk_len);
+        rv_log_warn("root_disk: %s", root_disk);
+        rv_log_warn("idx: %d", attr->vblk_cnt - (*root_disk - 'a') - 1);
+
+        /* starts from /dev/vda and the alphabet order is in reverse, a-z has 26
+         * characters */
+        attr->boot_disk = attr->vblk_cnt - (*root_disk - 'a') -
+                          ((root_disk_len - 1) * 26) - 1;
+    }
+
 
     if (vblk) {
         int node = fdt_path_offset(dtb_buf, "/soc@F0000000");
@@ -529,6 +576,9 @@ riscv_t *rv_create(riscv_user_t rv_attr)
 
     /* reset */
     rv_reset(rv, 0U);
+
+    /* valid disk idx should be >= 0 */
+    attr->boot_disk = -1;
 
     /*
      * default standard stream.
@@ -784,7 +834,8 @@ void rv_run(riscv_t *rv)
     vm_attr_t *attr = PRIV(rv);
     assert(attr &&
 #if RV32_HAS(SYSTEM) && !RV32_HAS(ELF_LOADER)
-           attr->data.system.kernel && attr->data.system.initrd
+           attr->data.system.kernel &&
+           (attr->data.system.initrd || attr->data.system.vblk_device)
 #else
            attr->data.user.elf_program
 #endif

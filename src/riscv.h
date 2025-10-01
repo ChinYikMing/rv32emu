@@ -564,6 +564,9 @@ typedef struct {
 
     /* SBI timer */
     uint64_t timer;
+
+    /* rootfs boot disk idx */
+    int boot_disk;
 } vm_attr_t;
 
 #ifdef __cplusplus

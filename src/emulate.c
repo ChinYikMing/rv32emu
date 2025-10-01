@@ -370,6 +370,7 @@ static bool has_loops = false;
 
 #if RV32_HAS(SYSTEM) && !RV32_HAS(ELF_LOADER)
 extern void emu_update_uart_interrupts(riscv_t *rv);
+extern void emu_update_vblk_interrupts(riscv_t *rv);
 static uint32_t peripheral_update_ctr = 64;
 #endif
 
@@ -1226,6 +1227,10 @@ retranslate:
 }
 
 #if RV32_HAS(SYSTEM)
+static int old_scause;
+static int old_stval;
+static int old_pc;
+static int has_vblk_intr = 0;
 static void __trap_handler(riscv_t *rv)
 {
     rv_insn_t *ir = mpool_calloc(rv->block_ir_mp);
@@ -1233,6 +1238,8 @@ static void __trap_handler(riscv_t *rv)
 
     /* set to false by sret implementation */
     while (rv->is_trapped && !rv_has_halted(rv)) {
+        /* FIXME: handle nested interrupt */
+    rerun:
         uint32_t insn = rv->io.mem_ifetch(rv, rv->PC);
         assert(insn);
 
@@ -1242,6 +1249,47 @@ static void __trap_handler(riscv_t *rv)
         ir->impl = dispatch_table[ir->opcode];
         rv->compressed = is_compressed(insn);
         ir->impl(rv, ir, rv->csr_cycle, rv->PC);
+
+        if (PRIV(rv)->boot_disk >= 0 &&
+            PRIV(rv)->vblk[PRIV(rv)->boot_disk]->interrupt_status) {
+            // rv_log_error("vblk count: %d", PRIV(rv)->vblk_cnt);
+            // rv_log_error("has vblk interrupt but cannot handled");
+            // exit(1);
+            // uint32_t sstatus_sie;
+            if (rv_has_plic_trap(rv)) {
+                uint32_t intr_applicable = rv->csr_sip & rv->csr_sie;
+                uint8_t intr_idx = ilog2(intr_applicable);
+                switch (intr_idx) {
+                case (SUPERVISOR_EXTERNAL_INTR & 0xf):
+                    // rv_log_error("has vblk interrupt in trap handler");
+                    old_scause = rv->csr_scause;
+                    rv->csr_scause = SUPERVISOR_EXTERNAL_INTR;
+                    old_stval = rv->csr_stval;
+                    rv->csr_stval = 0;
+                    old_pc = rv->PC;
+                    rv->PC = rv->csr_stvec & ~0x3;
+                    // rv->csr_sip = 0;
+                    has_vblk_intr = 1;
+                    // sstatus_sie =
+                    //     (rv->csr_sstatus & SSTATUS_SIE) >> SSTATUS_SIE_SHIFT;
+                    // rv->csr_sstatus |= (sstatus_sie << SSTATUS_SPIE_SHIFT);
+                    rv->csr_sstatus &= ~(SSTATUS_SIE);
+                    goto rerun;
+                    break;
+                default:
+                    break;
+                }
+            }
+        }
+    }
+    if (has_vblk_intr) {
+        // rv_log_error("has vblk interrupt and is handled");
+        rv->csr_scause = old_scause;
+        rv->csr_stval = old_stval;
+        rv->PC = old_pc;
+        has_vblk_intr = 0;
+        rv->is_trapped = true;
+        goto rerun;
     }
 
     prev = NULL;
