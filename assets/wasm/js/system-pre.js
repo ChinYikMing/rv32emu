@@ -1,7 +1,12 @@
 Module["noInitialRun"] = true;
 
 Module["run_system"] = function (cli_param) {
-  callMain(cli_param.split(" "));
+const args = [...cli_param.matchAll(/'[^']*'|"[^"]*"|\S+/g)]
+              .map(m => m[0].replace(/^['"]|['"]$/g, ''));
+
+console.log(args);
+
+  callMain(args);
 };
 
 // index.html's preRun needs to access this, thus declaring as global

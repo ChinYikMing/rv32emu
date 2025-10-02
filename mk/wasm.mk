@@ -37,7 +37,7 @@ CFLAGS_emcc += -sINITIAL_MEMORY=2GB \
 
 ifeq ($(call has, SYSTEM), 1)
 CFLAGS_emcc += --embed-file build/linux-image/Image@Image \
-	       --embed-file build/linux-image/rootfs.cpio@rootfs.cpio \
+	       --embed-file disk1.img@disk1.img \
 	       --embed-file build/minimal.dtb@/minimal.dtb \
 	       --pre-js $(WEB_JS_RESOURCES)/system-pre.js
 else
