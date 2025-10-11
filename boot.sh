@@ -5,12 +5,16 @@ set -e
 virtio_block_list=()
 
 # The disk1.img should have all the files from the original rootfs.cpio
+#virtio_block_list+=("-x vblk:disk_ext2.img")
+
+#virtio_block_list+=("-x vblk:disk_ext3.img")
+
+# Ext4
 virtio_block_list+=("-x vblk:disk1.img")
-for x in {1..28}; do
-	echo $x
-	virtio_block_list+=("-x vblk:disk1.img")
-done
-virtio_block_list+=("-x vblk:disk1.img")
+#for x in {1..3}; do
+#	echo $x
+#	virtio_block_list+=("-x vblk:disk_ext3.img")
+#done
 
 echo "${virtio_block_list[@]}"
 
@@ -23,4 +27,8 @@ echo "${virtio_block_list[@]}"
 #build/rv32emu -k build/linux-image/Image -b 'earlycon console=ttyS0 root=/dev/vdab' ${virtio_block_list[@]}
 
 # Linux 6.12.x
-build/rv32emu -k /tmp/linux/arch/riscv/boot/Image -b 'earlycon console=ttyS0 root=/dev/vdy' ${virtio_block_list[@]}
+#build/rv32emu -k /tmp/linux/arch/riscv/boot/Image -b 'earlycon console=ttyS0 root=/dev/vda' ${virtio_block_list[@]}
+build/rv32emu -k /home/chinyikming/linux/arch/riscv/boot/Image -b 'earlycon console=ttyS0 root=/dev/vda' ${virtio_block_list[@]}
+
+# initrd
+#build/rv32emu -k /home/chinyikming/linux/arch/riscv/boot/Image -i zstd-rootfs.cpio ${virtio_block_list[@]}

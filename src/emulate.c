@@ -1231,6 +1231,9 @@ static int old_stval;
 static int old_pc;
 static int has_vblk_intr = 0;
 static bool intr_running = false;
+static int resume_pc = 0;
+static uint32_t resume_pc_first_pc = 0;
+static int enter_again = false;
 static void __trap_handler(riscv_t *rv)
 {
     rv_insn_t *ir = mpool_calloc(rv->block_ir_mp);
@@ -1240,6 +1243,27 @@ static void __trap_handler(riscv_t *rv)
     while (rv->is_trapped && !rv_has_halted(rv)) {
         /* FIXME: handle nested interrupt */
     rerun:
+	    //if(intr_running && PRIV(rv)->vblk[PRIV(rv)->boot_disk]->interrupt_status){
+	    //    printf("PC: %x, intr_status: %d\n", rv->PC, PRIV(rv)->vblk[PRIV(rv)->boot_disk]->interrupt_status);
+	    //    exit(1);
+	    //}
+	if(enter_again){
+		//printf("PC: %x, intr_status: %d\n", rv->PC, PRIV(rv)->vblk[PRIV(rv)->boot_disk]->interrupt_status);
+		//if(rv->PC == 0xc01cfb1c){
+		//	rv_log_warn("ext4 has same finish pc");
+		//}
+	}
+
+	if(enter_again && rv->PC == resume_pc_first_pc){
+		//rv_log_fatal("\nEndless loop!");
+		//exit(1);
+	}
+
+	if(resume_pc && !enter_again){
+		resume_pc_first_pc = rv->PC;
+		enter_again = true;
+		rv_log_warn("\nresume pc handling PC: %x", rv->PC);
+	}
         uint32_t insn = rv->io.mem_ifetch(rv, rv->PC);
         assert(insn);
 
@@ -1252,37 +1276,65 @@ static void __trap_handler(riscv_t *rv)
 
         if (!intr_running && PRIV(rv)->boot_disk >= 0 &&
             PRIV(rv)->vblk[PRIV(rv)->boot_disk]->interrupt_status) {
-            // rv_log_error("vblk count: %d", PRIV(rv)->vblk_cnt);
             // exit(1);
             // uint32_t sstatus_sie;
             if (rv_has_plic_trap(rv)) {
-                // rv_log_error("has vblk interrupt in trap handler");
+                rv_log_error("has vblk interrupt in trap handler");
                 old_scause = rv->csr_scause;
                 rv->csr_scause = SUPERVISOR_EXTERNAL_INTR;
                 old_stval = rv->csr_stval;
                 rv->csr_stval = 0;
                 old_pc = rv->PC;
-                rv->PC = rv->csr_stvec & ~0x3;
+                rv->PC = rv->csr_stvec;
                 // rv->csr_sip = 0;
                 has_vblk_intr = 1;
-                // sstatus_sie =
-                //     (rv->csr_sstatus & SSTATUS_SIE) >> SSTATUS_SIE_SHIFT;
-                // rv->csr_sstatus |= (sstatus_sie << SSTATUS_SPIE_SHIFT);
                 intr_running = true;
+
+                const uint32_t sstatus_sie =
+                    (rv->csr_sstatus & SSTATUS_SIE) >> SSTATUS_SIE_SHIFT;
+                rv->csr_sstatus |= (sstatus_sie << SSTATUS_SPIE_SHIFT);
+
                 rv->csr_sstatus &= ~(SSTATUS_SIE);
+
+                //PRIV(rv)->vblk[PRIV(rv)->boot_disk]->interrupt_status = 0;
+
+		//rv_log_info("sip: 0x%x\n", rv->csr_sip);
+		//rv_log_info("sie: 0x%x\n", rv->csr_sie);
+		//exit(1);
+
                 goto rerun;
             }
         }
     }
     if (has_vblk_intr) {
-        // rv_log_error("has vblk interrupt and is handled");
+	resume_pc = 1;
+        rv_log_error("has vblk interrupt and is handled");
+
+        rv->csr_sstatus &= ~(SSTATUS_SPP);
+
+        const uint32_t sstatus_spie =
+            (rv->csr_sstatus & SSTATUS_SPIE) >> SSTATUS_SPIE_SHIFT;
+        rv->csr_sstatus |= (sstatus_spie << SSTATUS_SIE_SHIFT);
+        rv->csr_sstatus |= SSTATUS_SPIE;
+
         rv->csr_scause = old_scause;
         rv->csr_stval = old_stval;
         rv->PC = old_pc;
         has_vblk_intr = 0;
         rv->is_trapped = true;
+
+        //rv->csr_sstatus &= ~(SSTATUS_SPP);
+
+        //const uint32_t sstatus_spie =
+        //    (rv->csr_sstatus & SSTATUS_SPIE) >> SSTATUS_SPIE_SHIFT;
+        //rv->csr_sstatus |= (sstatus_spie << SSTATUS_SIE_SHIFT);
+        //rv->csr_sstatus |= SSTATUS_SPIE;
         goto rerun;
     }
+    //if(resume_pc){
+    //	rv_log_info("here exit");
+    //    exit(1);
+    //}
 
     intr_running = false;
     has_vblk_intr = 0;
@@ -1381,6 +1433,7 @@ void ebreak_handler(riscv_t *rv)
     SET_CAUSE_AND_TVAL_THEN_TRAP(rv, BREAKPOINT, rv->PC);
 }
 
+int running_sdl = 0;
 void ecall_handler(riscv_t *rv)
 {
     assert(rv);
@@ -1398,11 +1451,16 @@ void ecall_handler(riscv_t *rv)
         case 0xFEED:
         case 0xBABE:
         case 0xD00D:
-        case 93:
             syscall_handler(rv);
             rv->PC += 4;
             break;
         default:
+	    if(running_sdl && rv_get_reg(rv, rv_reg_a7) == 93){
+    extern void sdl_video_audio_cleanup();
+    sdl_video_audio_cleanup();
+    rv_log_warn("cleanup sdl here");
+	    running_sdl = 0;
+	    }
             SET_CAUSE_AND_TVAL_THEN_TRAP(rv, ECALL_U, 0);
             break;
         }

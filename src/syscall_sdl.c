@@ -378,6 +378,7 @@ void syscall_draw_frame(riscv_t *rv)
     SDL_RenderPresent(renderer);
 }
 
+extern int running_sdl;
 void syscall_setup_queue(riscv_t *rv)
 {
 #if RV32_HAS(SYSTEM) && !RV32_HAS(ELF_LOADER)
@@ -389,6 +390,9 @@ void syscall_setup_queue(riscv_t *rv)
     event_queue.base = event_queue.end = 0;
     submission_queue.base = submission_queue.start = 0;
 #endif
+
+
+    running_sdl = 1;
 
     /* setup_queue(base, capacity, event_count) */
     uint32_t base = rv_get_reg(rv, rv_reg_a0);
