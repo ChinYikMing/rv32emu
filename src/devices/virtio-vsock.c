@@ -176,8 +176,7 @@ void virtio_vsock_inject(virtio_vsock_state_t *vsock,
      * thus,
      */
     struct virtio_vsock_packet _pkt;
-    struct virtio_vsock_packet *rx_pkt =
-        pkt ? pkt : &_pkt;
+    struct virtio_vsock_packet *rx_pkt = pkt ? pkt : &_pkt;
 
     switch (op) {
     case VIRTIO_VSOCK_OP_REQUEST:
@@ -212,8 +211,7 @@ void virtio_vsock_inject(virtio_vsock_state_t *vsock,
 
         if (recv_cnt > 0) {
             /* Push received vsock data into the RX */
-            rx_pkt =
-                malloc(sizeof(struct virtio_vsock_packet) + recv_cnt);
+            rx_pkt = malloc(sizeof(struct virtio_vsock_packet) + recv_cnt);
             assert(rx_pkt);
 
             rx_pkt->hdr.op = VIRTIO_VSOCK_OP_RW;
@@ -252,15 +250,7 @@ void virtio_vsock_inject(virtio_vsock_state_t *vsock,
 
 static void virtio_queue_notify_handler(virtio_vsock_state_t *vsock, int index)
 {
-    /* RX(index = 0) and Event(index = 2) data are flowed from device to driver.
-     * Queue notification is only triggered by TX(index = 1) that the data
-     * is flowed from driver to device. Thus, index should be = 1.
-     */
-    // FIXME: 0 and 2 should not be here
-    // if(index != 1){
-    //	rv_log_info("index: %d", index);
-    //}
-    // assert(index == 1);
+    assert(index >= 0 && index <= 2);
 
     uint32_t *ram = vsock->ram;
     virtio_queue_t *queue = &vsock->queues[index];
@@ -270,6 +260,12 @@ static void virtio_queue_notify_handler(virtio_vsock_state_t *vsock, int index)
     uint16_t buffer_idx =
         ram[queue->queue_avail + 1 + queue_idx / 2] >> (16 * (queue_idx % 2));
     queue->last_avail++;
+
+    /* RX(index = 0) and Event(index = 2) just increase the available. But
+     * TX(index = 1) needs to parse headers.
+     */
+    if (index == 0 || index == 2)
+        return;
 
     /* Read descriptor */
     struct virtq_desc *vq_desc =
@@ -397,10 +393,10 @@ static void virtio_queue_notify_handler(virtio_vsock_state_t *vsock, int index)
                 vq_desc = (struct virtq_desc *) &vsock
                               ->ram[queue->queue_desc + vq_desc->next * 4];
 
-                if ((ret = send(vsock->client_fd,
-                                (void *)((uintptr_t) vsock->ram +
-                                    vq_desc->addr),
-                                vq_desc->len, 0) < 0)) {
+                if ((ret =
+                         send(vsock->client_fd,
+                              (void *) ((uintptr_t) vsock->ram + vq_desc->addr),
+                              vq_desc->len, 0) < 0)) {
                     rv_log_error("send() failed: %s", strerror(errno));
                     break;
                 };
