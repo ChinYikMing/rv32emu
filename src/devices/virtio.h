@@ -152,7 +152,7 @@ typedef struct {
     uint64_t cid;  /* context ID */
     int port;
     int peer_port;
-    int socket;
+    int socket; /* listening socket */
     int client_fd; /* FIXME: use better naming */
     uint8_t recv_buf[1024];
     uint32_t peer_free;
