@@ -326,7 +326,7 @@ static void virtio_queue_notify_handler(virtio_vsock_state_t *vsock, int index)
             int sock = socket(AF_VSOCK, SOCK_STREAM, 0);
             if (sock < 0) {
                 rv_log_error("socket() failed: %s", strerror(errno));
-                return 1;
+                return;
             }
             vsock->client_fd = sock;
 
@@ -335,7 +335,7 @@ static void virtio_queue_notify_handler(virtio_vsock_state_t *vsock, int index)
             if (getsockname(vsock->client_fd, (struct sockaddr *) &client_sa,
                             &client_len) == -1) {
                 rv_log_error("getsockname() failed: %s", strerror(errno));
-                return 1;
+                return;
             }
 
             if (connect(vsock->client_fd, (struct sockaddr *) &svm,
@@ -346,7 +346,7 @@ static void virtio_queue_notify_handler(virtio_vsock_state_t *vsock, int index)
                 resp.hdr.op = VIRTIO_VSOCK_OP_RST;
                 virtio_vsock_inject(vsock, VIRTIO_VSOCK_OP_RESPONSE, &resp,
                                     &client_sa);
-                return 1;
+                return;
             }
 
             /* store the connected port for virtio_vsock_recv() */
@@ -389,7 +389,7 @@ static void virtio_queue_notify_handler(virtio_vsock_state_t *vsock, int index)
             }
             if (shutdown(vsock->client_fd, shutdown_how) < 0) {
                 rv_log_error("shutdown() failed: %s", strerror(errno));
-                return 1;
+                return;
             }
             break;
         case VIRTIO_VSOCK_OP_RW:
@@ -398,8 +398,8 @@ static void virtio_queue_notify_handler(virtio_vsock_state_t *vsock, int index)
                               ->ram[queue->queue_desc + vq_desc->next * 4];
 
                 if ((ret = send(vsock->client_fd,
-                                (uintptr_t) vsock->ram +
-                                    (uintptr_t) vq_desc->addr,
+                                (void *)((uintptr_t) vsock->ram +
+                                    vq_desc->addr),
                                 vq_desc->len, 0) < 0)) {
                     rv_log_error("send() failed: %s", strerror(errno));
                     break;
