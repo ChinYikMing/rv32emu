@@ -18,14 +18,6 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
-/*
- * The linux/vm_sockets.h must after sys/socket.h
- * to pevent incomplete type ‘struct sockaddr’.
- */
-/* clang-format off */
-#include <sys/socket.h>
-#include <linux/vm_sockets.h>
-/* clang-format on */
 
 #include "virtio.h"
 
@@ -77,7 +69,6 @@ struct virtio_vsock_event {
 };
 
 static struct virtio_vsock_config vsock_configs[1];
-static int vsock_dev_cnt = 0;
 
 static void virtio_vsock_set_fail(virtio_vsock_state_t *vsock)
 {
@@ -100,7 +91,7 @@ static inline uint32_t vsock_preprocess(virtio_vsock_state_t *vsock UNUSED,
 static void virtio_vsock_update_status(virtio_vsock_state_t *vsock,
                                        uint32_t status)
 {
-    //rv_log_error("update status: %u", status);
+    // rv_log_error("update status: %u", status);
     vsock->status |= status;
     if (status)
         return;
@@ -134,110 +125,6 @@ static void virtio_vsock_update_status(virtio_vsock_state_t *vsock,
     vsock->priv = priv;
 }
 
-static void virtio_vsock_write_handler(virtio_vsock_state_t *vsock,
-                                       uint64_t sector,
-                                       uint64_t desc_addr,
-                                       uint32_t len)
-{
-    // void *dest = (void *) ((uintptr_t) vsock->disk + sector * DISK_BLK_SIZE);
-    // const void *src = (void *) ((uintptr_t) vsock->ram + desc_addr);
-    // memcpy(dest, src, len);
-}
-
-static void virtio_vsock_read_handler(virtio_vsock_state_t *vsock,
-                                      uint64_t sector,
-                                      uint64_t desc_addr,
-                                      uint32_t len)
-{
-    // void *dest = (void *) ((uintptr_t) vsock->ram + desc_addr);
-    // const void *src =
-    //     (void *) ((uintptr_t) vsock->disk + sector * DISK_BLK_SIZE);
-    // memcpy(dest, src, len);
-}
-
-static int virtio_vsock_desc_handler(virtio_vsock_state_t *vsock,
-                                     const virtio_queue_t *queue,
-                                     uint16_t desc_idx,
-                                     uint32_t *plen)
-{
-    /* A full virtio_vsock_req is represented by 3 descriptors, where
-     * the first descriptor contains:
-     *   le32 type
-     *   le32 reserved
-     *   le64 sector
-     * the second descriptor contains:
-     *   u8 data[][512]
-     * the third descriptor contains:
-     *   u8 status
-     */
-    // struct virtq_desc vq_desc[3];
-
-    ///* Collect the descriptors */
-    // for (int i = 0; i < 3; i++) {
-    //     /* The size of the `struct virtq_desc` is 4 words */
-    //     const struct virtq_desc *desc =
-    //         (struct virtq_desc *) &vsock->ram[queue->queue_desc + desc_idx *
-    //         4];
-
-    //    /* Retrieve the fields of current descriptor */
-    //    vq_desc[i].addr = desc->addr;
-    //    vq_desc[i].len = desc->len;
-    //    vq_desc[i].flags = desc->flags;
-    //    desc_idx = desc->next;
-    //}
-
-    ///* The next flag for the first and second descriptors should be set,
-    // * whereas for the third descriptor is should not be set
-    // */
-    // if (!(vq_desc[0].flags & VIRTIO_DESC_F_NEXT) ||
-    //    !(vq_desc[1].flags & VIRTIO_DESC_F_NEXT) ||
-    //    (vq_desc[2].flags & VIRTIO_DESC_F_NEXT)) {
-    //    /* since the descriptor list is abnormal, we don't write the status
-    //     * back here */
-    //    virtio_vsock_set_fail(vsock);
-    //    return -1;
-    //}
-
-    ///* Process the header */
-    // const struct vsock_req_header *header =
-    //     (struct vsock_req_header *) ((uintptr_t) vsock->ram +
-    //     vq_desc[0].addr);
-    // uint32_t type = header->type;
-    // uint64_t sector = header->sector;
-    // uint8_t *status = (uint8_t *) ((uintptr_t) vsock->ram + vq_desc[2].addr);
-
-    ///* Check sector index is valid */
-    // if (sector > (VSOCK_PRIV(vsock)->capacity - 1)) {
-    //     *status = VIRTIO_VSOCK_S_IOERR;
-    //     return -1;
-    // }
-
-    ///* Process the data */
-    // switch (type) {
-    // case VIRTIO_VSOCK_T_IN:
-    //     virtio_vsock_read_handler(vsock, sector, vq_desc[1].addr,
-    //     vq_desc[1].len); break;
-    // case VIRTIO_VSOCK_T_OUT:
-    //     if (vsock->device_features & VIRTIO_VSOCK_F_RO) { /* readonly */
-    //         rv_log_error("Fail to write on a read only block device");
-    //         *status = VIRTIO_VSOCK_S_IOERR;
-    //         return -1;
-    //     }
-    //     virtio_vsock_write_handler(vsock, sector, vq_desc[1].addr,
-    //     vq_desc[1].len); break;
-    // default:
-    //     rv_log_error("Unsupported virtio-blk operation");
-    //     *status = VIRTIO_VSOCK_S_UNSUPP;
-    //     return -1;
-    // }
-
-    ///* Return the device status */
-    //*status = VIRTIO_VSOCK_S_OK;
-    //*plen = vq_desc[1].len;
-
-    return 0;
-}
-
 static void virtio_queue_response_handler(virtio_vsock_state_t *vsock,
                                           struct virtio_vsock_packet *resp)
 {
@@ -267,8 +154,6 @@ static void virtio_queue_response_handler(virtio_vsock_state_t *vsock,
     ram[vq_used_addr + 1] = sizeof(*resp) + resp->hdr.len;
     used++;
 
-    //rv_log_trace("response len: %lu, buffer_idx: %u", sizeof(*resp) + resp->hdr.len, buffer_idx);
-
     /* Reset used ring flag to zero (virtq_used.flags) */
     ram[queue->queue_used] &= MASK(16);
 
@@ -281,104 +166,105 @@ static void virtio_queue_response_handler(virtio_vsock_state_t *vsock,
         vsock->interrupt_status |= VIRTIO_INT_USED_RING;
 }
 
-void virtio_vsock_recv(virtio_vsock_state_t *vsock)
+void virtio_vsock_inject(virtio_vsock_state_t *vsock,
+                         int op,
+                         void *pkt,
+                         struct sockaddr_vm *client_sa)
 {
-    //if (vsock->pending_cnt) {
-    //    if (vsock->peer_free < vsock->pending_cnt) {
-    //        //rv_log_trace("peer_free is not enough to resend, peer_free: %u, pending_cnt: %u", vsock->peer_free, vsock->pending_cnt);
-    //        return;
-    //    }
+    /* Some operations(e.g., VIRTIO_VSOCK_OP_RESPONSE)
+     * might fail before notifying the driver via RX,
+     * thus,
+     */
+    struct virtio_vsock_packet _pkt;
+    struct virtio_vsock_packet *rx_pkt =
+        pkt ? pkt : &_pkt;
 
-    //    rv_log_trace("Resend pending data");
-
-    //    struct virtio_vsock_packet *rx_pkt =
-    //        malloc(sizeof(struct virtio_vsock_packet) + vsock->pending_cnt);
-    //    assert(rx_pkt);
-
-    //    rx_pkt->hdr.op = VIRTIO_VSOCK_OP_RW;
-    //    rx_pkt->hdr.type = VIRTIO_VSOCK_TYPE_STREAM;
-    //    rx_pkt->hdr.src_cid = VMADDR_CID_HOST;
-    //    rx_pkt->hdr.src_port = vsock->peer_port;
-    //    rx_pkt->hdr.dst_cid = vsock->cid;
-    //    rx_pkt->hdr.dst_port = vsock->port;
-    //    rx_pkt->hdr.len = vsock->pending_cnt;
-    //    rx_pkt->hdr.flags = 0;
-    //    rx_pkt->hdr.buf_alloc = 1024;
-    //    rx_pkt->hdr.fwd_cnt = 0;
-    //    memcpy(rx_pkt->data, vsock->recv_buf, vsock->pending_cnt);
-
-    //    virtio_queue_response_handler(vsock, rx_pkt);
-
-    //    vsock->pending_cnt = 0;
-
-    //    free(rx_pkt);
-    //}
-
-    ssize_t recv_cnt = recv(vsock->socket, vsock->recv_buf,
-                            ARRAY_SIZE(vsock->recv_buf), MSG_DONTWAIT);
-
-    //if (vsock->peer_free < recv_cnt) {
-    //    vsock->pending_cnt = recv_cnt;
-    //    return;
-    //}
-
-    if (recv_cnt > 0) {
-        // rv_log_trace("Received %zd bytes from host\n", n);
-        /* Push received vsock packet into the RX virtqueue */
-        struct virtio_vsock_packet *rx_pkt =
-            malloc(sizeof(struct virtio_vsock_packet) + recv_cnt);
-        assert(rx_pkt);
-
-        rx_pkt->hdr.op = VIRTIO_VSOCK_OP_RW;
+    switch (op) {
+    case VIRTIO_VSOCK_OP_REQUEST:
+        rx_pkt->hdr.op = VIRTIO_VSOCK_OP_REQUEST;
         rx_pkt->hdr.type = VIRTIO_VSOCK_TYPE_STREAM;
         rx_pkt->hdr.src_cid = VMADDR_CID_HOST;
-        rx_pkt->hdr.src_port = vsock->peer_port;
+        rx_pkt->hdr.src_port = client_sa->svm_port;
         rx_pkt->hdr.dst_cid = vsock->cid;
-        rx_pkt->hdr.dst_port = vsock->port;
-        rx_pkt->hdr.len = recv_cnt;
+        rx_pkt->hdr.dst_port = 2222;  // guest listen port, FIXME: dynamic
+        rx_pkt->hdr.len = 0;
         rx_pkt->hdr.flags = 0;
         rx_pkt->hdr.buf_alloc = 1024;
         rx_pkt->hdr.fwd_cnt = 0;
-        memcpy(rx_pkt->data, vsock->recv_buf, recv_cnt);
 
-	vsock->recv_buf[recv_cnt] = 0;
-        //rv_log_trace("from recv push buffer: %s", vsock->recv_buf);
+        vsock->peer_port = 2222;  // guest listen port, FIXME: dynamic
+        vsock->port = client_sa->svm_port;
+
         virtio_queue_response_handler(vsock, rx_pkt);
+        break;
+    case VIRTIO_VSOCK_OP_RESPONSE:
+        /* Pair with TX's VIRTIO_VSOCK_OP_REQUEST
+         *
+         * Driver connects to the device via VIRTIO_VSOCK_OP_REQUEST on TX,
+         * device response this(VIRTIO_VSOCK_OP_RESPONSE) on RX
+         */
+        rv_log_trace("Connection establised...");
+        virtio_queue_response_handler(vsock, rx_pkt);
+        break;
+    case VIRTIO_VSOCK_OP_RW:
+        ssize_t recv_cnt = recv(vsock->client_fd, vsock->recv_buf,
+                                ARRAY_SIZE(vsock->recv_buf), MSG_DONTWAIT);
 
-        vsock->tx_cnt += recv_cnt;
-        vsock->pending_cnt = 0;
+        if (recv_cnt > 0) {
+            /* Push received vsock data into the RX */
+            rx_pkt =
+                malloc(sizeof(struct virtio_vsock_packet) + recv_cnt);
+            assert(rx_pkt);
 
-        free(rx_pkt);
+            rx_pkt->hdr.op = VIRTIO_VSOCK_OP_RW;
+            rx_pkt->hdr.type = VIRTIO_VSOCK_TYPE_STREAM;
+            rx_pkt->hdr.src_cid = VMADDR_CID_HOST;
+            rx_pkt->hdr.src_port = vsock->port;
+            rx_pkt->hdr.dst_cid = vsock->cid;
+            rx_pkt->hdr.dst_port = vsock->peer_port;
+            rx_pkt->hdr.len = recv_cnt;
+            rx_pkt->hdr.flags = 0;
+            rx_pkt->hdr.buf_alloc = 1024;
+            rx_pkt->hdr.fwd_cnt = 0;
+            memcpy(rx_pkt->data, vsock->recv_buf, recv_cnt);
 
-        // vsock->recv_buf[recv_cnt] = 0;
-        // rv_log_trace("data: %s", (char *) vsock->recv_buf);
-    } else if (recv_cnt == 0) {
-        // FIXME:
-        // Host disconnected
-        // printf("Host disconnected\n");
-        // close(vsock->socket);
-        // vsock->socket = -1;
-    } else {
-        if (errno == EAGAIN || errno == EWOULDBLOCK) {
-            /* No data to read (if non-blocking) */
-            return;
+            vsock->recv_buf[recv_cnt] = 0;
+            rv_log_trace("from recv push buffer: %s", vsock->recv_buf);
+            virtio_queue_response_handler(vsock, rx_pkt);
+
+            vsock->tx_cnt += recv_cnt;
+            vsock->pending_cnt = 0;
+
+            free(rx_pkt);
+        } else if (recv_cnt == 0) {
+            // TODO:
+            // Host disconnected
+            // printf("Host disconnected\n");
+            // close(vsock->socket);
+            // vsock->socket = -1;
         }
-        //rv_log_error("recv() failed: %s", strerror(errno));
-        close(vsock->socket);
-        vsock->socket = -1;
+        break;
+    default:
+        rv_log_error("Unknown vsock operation on RX");
+        break;
     }
 }
 
-int x = 0;
-
 static void virtio_queue_notify_handler(virtio_vsock_state_t *vsock, int index)
 {
-    assert(index >= 0 && index <= 2);
+    /* RX(index = 0) and Event(index = 2) data are flowed from device to driver.
+     * Queue notification is only triggered by TX(index = 1) that the data
+     * is flowed from driver to device. Thus, index should be = 1.
+     */
+    // FIXME: 0 and 2 should not be here
+    // if(index != 1){
+    //	rv_log_info("index: %d", index);
+    //}
+    // assert(index == 1);
 
     uint32_t *ram = vsock->ram;
     virtio_queue_t *queue = &vsock->queues[index];
 
-    x++;
     // rv_log_trace("notify here, index: %d\n", index);
     uint16_t queue_idx = queue->last_avail % queue->queue_num;
     uint16_t buffer_idx =
@@ -389,32 +275,6 @@ static void virtio_queue_notify_handler(virtio_vsock_state_t *vsock, int index)
     struct virtq_desc *vq_desc =
         (struct virtq_desc *) &vsock->ram[queue->queue_desc + buffer_idx * 4];
 
-    //rv_log_trace("len: %u", vq_desc->len);
-
-    // PACKED(struct virtio_vsock_hdr {
-    //     /* Addressing */
-    //     uint64_t src_cid;
-    //     uint64_t dst_cid;
-    //     uint32_t src_port;
-    //     uint32_t dst_port;
-    //     /* Payload size excludes header */
-    //     uint32_t len;
-    //     /* Socket type (stream or seqpacket) */
-    //     uint16_t type;
-    //     /* Operation */
-    //     uint16_t op;
-    //     /* Flags depends on operations */
-    //     uint32_t flags;
-    //     /* Buffer space management of stream sockets */
-    //     uint32_t buf_alloc;
-    //     uint32_t fwd_cnt;
-    // });
-
-    // PACKED(struct virtio_vsock_packet {
-    //     struct virtio_vsock_hdr hdr;
-    //     uint8_t data[];
-    // });
-
     struct virtio_vsock_packet *vsock_pkt = VSOCK_PKT(vsock, vq_desc);
 
     /* TODO: support seqpacket */
@@ -423,55 +283,25 @@ static void virtio_queue_notify_handler(virtio_vsock_state_t *vsock, int index)
         return;
     }
 
-    //rv_log_trace(
-    //    "src_cid: %lu, src_port: %lu, dst_cid: %lu, dst_port: %lu, op: %u",
-    //    vsock_pkt->hdr.src_cid, vsock_pkt->hdr.src_port, vsock_pkt->hdr.dst_cid,
-    //    vsock_pkt->hdr.dst_port, vsock_pkt->hdr.op);
-
     ssize_t ret;
     int shutdown_how = 0;
-    if (index == 0) { /* RX */
-        //rv_log_info("----------------rx---------------");
+    if (index == 1) { /* TX */
         switch (vsock_pkt->hdr.op) {
         case VIRTIO_VSOCK_OP_REQUEST:
-            //rv_log_trace("rx request\n");
-            break;
-        case VIRTIO_VSOCK_OP_RESPONSE:
-            //rv_log_trace("rx response\n");
-            break;
-        case VIRTIO_VSOCK_OP_RST:
-            //rv_log_trace("rx reset\n");
-            break;
-        case VIRTIO_VSOCK_OP_SHUTDOWN:
-            //rv_log_trace("rx shutdown\n");
-            break;
-        case VIRTIO_VSOCK_OP_RW:
-            //rv_log_trace("rx rw\n");
-            break;
-        case VIRTIO_VSOCK_OP_CREDIT_UPDATE:
-            //rv_log_trace("rx credit_update...");
-            break;
-        case VIRTIO_VSOCK_OP_CREDIT_REQUEST:
-            //rv_log_trace("rx creadit_request...");
-            break;
-        default:
-            //rv_log_error("rx Unknown vsock operation");
-            break;
-        }
-    } else if (index == 1) { /* TX */
-        //rv_log_info("tx");
-        //uint32_t data_len = vq_desc->len - sizeof(struct virtio_vsock_hdr);
-        //rv_log_info("len: %u", vq_desc->len);
-        //rv_log_info("hdr_len: %u", sizeof(struct virtio_vsock_hdr));
-        //rv_log_info("data_len: %u", data_len);
-        //for (int i = 0; i < data_len; i++) {
-        //    printf("%c", vsock_pkt->data[i]);
-        //}
+            /* Pair with RX's VIRTIO_VSOCK_OP_RESPONSE
+             *
+             * Driver connects to the device via VIRTIO_VSOCK_OP_REQUEST on TX,
+             * device response with VIRTIO_VSOCK_OP_RESPONSE on RX
+             */
 
-        switch (vsock_pkt->hdr.op) {
-        case VIRTIO_VSOCK_OP_REQUEST:
-            rv_log_trace("connecting..., dst_port: %u",
-                         vsock_pkt->hdr.dst_port);
+            // rv_log_trace("connecting..., dst_port: %u",
+            //              vsock_pkt->hdr.dst_port);
+            // rv_log_trace("connecting..., dst_cid: %u",
+            //              vsock_pkt->hdr.dst_cid);
+            // rv_log_trace("connecting..., src_port: %u",
+            //              vsock_pkt->hdr.src_port);
+            // rv_log_trace("connecting..., src_cid: %u",
+            //              vsock_pkt->hdr.src_cid);
             struct sockaddr_vm svm = {
                 .svm_family = AF_VSOCK,
                 .svm_port = vsock_pkt->hdr.dst_port,
@@ -491,73 +321,93 @@ static void virtio_queue_notify_handler(virtio_vsock_state_t *vsock, int index)
                     .fwd_cnt = 0,
                 }};
 
-            /* socket might shutdown, so creating a new one is required */
+            /* socket might shutdown, so creating a new one for every connection
+             */
             int sock = socket(AF_VSOCK, SOCK_STREAM, 0);
-            if (socket < 0) {
-                //rv_log_error("socket() failed: %s", strerror(errno));
-                return;
+            if (sock < 0) {
+                rv_log_error("socket() failed: %s", strerror(errno));
+                return 1;
             }
-            vsock->socket = sock;
+            vsock->client_fd = sock;
 
-            if (connect(vsock->socket, (struct sockaddr *) &svm, sizeof(svm)) <
-                0) {
-                //rv_log_error("connect() failed: %s", strerror(errno));
+            struct sockaddr_vm client_sa = {0};
+            socklen_t client_len = sizeof(client_sa);
+            if (getsockname(vsock->client_fd, (struct sockaddr *) &client_sa,
+                            &client_len) == -1) {
+                rv_log_error("getsockname() failed: %s", strerror(errno));
+                return 1;
+            }
+
+            if (connect(vsock->client_fd, (struct sockaddr *) &svm,
+                        sizeof(svm)) < 0) {
+                rv_log_error("connect() failed: %s", strerror(errno));
 
                 /* Send VIRTIO_VSOCK_OP_RST if connecting fails  */
                 resp.hdr.op = VIRTIO_VSOCK_OP_RST;
-                virtio_queue_response_handler(vsock, &resp);
+                virtio_vsock_inject(vsock, VIRTIO_VSOCK_OP_RESPONSE, &resp,
+                                    &client_sa);
                 return 1;
             }
+
             /* store the connected port for virtio_vsock_recv() */
-            vsock->peer_port = vsock_pkt->hdr.dst_port;
-            vsock->port = vsock_pkt->hdr.src_port;
+            vsock->peer_port = vsock_pkt->hdr.src_port;
+            vsock->port = vsock_pkt->hdr.dst_port;
+
             /* Send VIRTIO_VSOCK_OP_RESPONSE if connecting OK */
-            virtio_queue_response_handler(vsock, &resp);
-            //rv_log_trace("Connect success\n");
+            virtio_vsock_inject(vsock, VIRTIO_VSOCK_OP_RESPONSE, &resp,
+                                &client_sa);
             break;
         case VIRTIO_VSOCK_OP_RESPONSE:
-            //rv_log_trace("response...");
+            /* Pair with RX's VIRTIO_VSOCK_OP_REQUEST
+             *
+             * Device connects to the driver via VIRTIO_VSOCK_OP_REQUEST on RX,
+             * driver response this(VIRTIO_VSOCK_OP_RESPONSE) on TX
+             */
+            rv_log_trace("Connection establised...");
             break;
         case VIRTIO_VSOCK_OP_RST:
-            //rv_log_trace("reseting...");
+            // FIXME: cannot send RST packet to socat, so socat does not show
+            // error: Connection reset by peer The close() is shutdown the socat
+            // gracefully, so no RST packet as well..
+
+            // FIXME: this need to be fixed?
+            /* RST(reset) packet comes after FIN(shutdown) packet,
+             * thus the close() should be careful to not close newly created
+             * client
+             */
+            rv_log_trace("Resetting...");
+
+            close(vsock->client_fd);
+            vsock->client_fd = -1;
             break;
         case VIRTIO_VSOCK_OP_SHUTDOWN:
+            rv_log_trace("shutdown...");
             shutdown_how = SHUT_RD;
             if (VSOCK_PKT_HDR(vsock, vq_desc).flags &
                 VIRTIO_VSOCK_SHUTDOWN_F_SEND) {
                 shutdown_how |= SHUT_WR;
             }
-            if (shutdown(vsock->socket, shutdown_how) < 0) {
-                //rv_log_error("shutdown() failed: %s", strerror(errno));
+            if (shutdown(vsock->client_fd, shutdown_how) < 0) {
+                rv_log_error("shutdown() failed: %s", strerror(errno));
+                return 1;
             }
-            //rv_log_trace("shutdown...");
-            close(vsock->socket);
-            vsock->socket = -1;
             break;
         case VIRTIO_VSOCK_OP_RW:
-            /* Send payload if any */
-            // char buf[1024] = {0};
-            // recv(vsock->socket, buf, 1024, 0);
-            // rv_log_trace("recv() buf: %s", buf);
-            //if (VSOCK_PKT_HDR(vsock, vq_desc).src_cid == 3) {
-            //    rv_log_fatal("rw operation from guest");
-            //} else {
-            //    rv_log_fatal("rw operation from host");
-            //}
             while (vq_desc->flags & VIRTIO_DESC_F_NEXT) {
                 vq_desc = (struct virtq_desc *) &vsock
                               ->ram[queue->queue_desc + vq_desc->next * 4];
 
-                if ((ret = send(vsock->socket,
+                if ((ret = send(vsock->client_fd,
                                 (uintptr_t) vsock->ram +
                                     (uintptr_t) vq_desc->addr,
                                 vq_desc->len, 0) < 0)) {
-                    //rv_log_error("send() failed: %s", strerror(errno));
+                    rv_log_error("send() failed: %s", strerror(errno));
                     break;
                 };
                 if (ret != vq_desc->len) {
-                    //rv_log_trace("ret: %zu, len: %u", ret, vq_desc->len);
+                    // rv_log_trace("ret: %zu, len: %u", ret, vq_desc->len);
                 }
+                // FIXME: this assertion does not true
                 // assert(ret == vq_desc->len);
 
                 // uint32_t data_len = vq_desc->len;
@@ -566,89 +416,27 @@ static void virtio_queue_notify_handler(virtio_vsock_state_t *vsock, int index)
                 // rv_log_info("data_len: %u", data_len);
                 // rv_log_fatal("vq_desc has next!");
             }
-            //rv_log_trace("payload sending...");
             break;
         case VIRTIO_VSOCK_OP_CREDIT_UPDATE:
             vsock->peer_free =
                 VSOCK_PKT_HDR(vsock, vq_desc).buf_alloc -
                 (vsock->tx_cnt - VSOCK_PKT_HDR(vsock, vq_desc).fwd_cnt);
-            //rv_log_error("peer_free: %u", vsock->peer_free);
-            //rv_log_error("credit update, tx_cnt: %u", vsock->tx_cnt);
-            //rv_log_error("credit update, buf_alloc: %u",
-            //             VSOCK_PKT_HDR(vsock, vq_desc).buf_alloc);
-            //rv_log_error("credit update, fwd_cnt: %u",
-            //             VSOCK_PKT_HDR(vsock, vq_desc).fwd_cnt);
-            //rv_log_trace("credit_update...");
+            // rv_log_error("peer_free: %u", vsock->peer_free);
+            // rv_log_error("credit update, tx_cnt: %u", vsock->tx_cnt);
+            // rv_log_error("credit update, buf_alloc: %u",
+            //              VSOCK_PKT_HDR(vsock, vq_desc).buf_alloc);
+            // rv_log_error("credit update, fwd_cnt: %u",
+            //              VSOCK_PKT_HDR(vsock, vq_desc).fwd_cnt);
+            // rv_log_trace("credit_update...");
             break;
         case VIRTIO_VSOCK_OP_CREDIT_REQUEST:
-            //rv_log_trace("creadit_request...");
+            // rv_log_trace("creadit_request...");
             break;
         default:
-            //rv_log_error("Unknown vsock operation");
+            rv_log_error("Unknown vsock operation on TX");
             break;
         }
-    } else { /* index == 2, Event */
-        //rv_log_info("-------------event------------");
     }
-
-    // const char *msg = "Hello via VSOCK!\n";
-    // write(vsock->socket, msg, strlen(msg));
-
-    ///* Check for new buffers */
-    // uint16_t new_avail = ram[queue->queue_avail] >> 16;
-    // if (new_avail - queue->last_avail > (uint16_t) queue->queue_num) {
-    //     rv_log_error("Size check fail");
-    //     return virtio_vsock_set_fail(vsock);
-    // }
-
-    // if (queue->last_avail == new_avail)
-    //     return;
-
-    ///* Process them */
-    // uint16_t new_used =
-    //     ram[queue->queue_used] >> 16; /* virtq_used.idx (le16) */
-    // while (queue->last_avail != new_avail) {
-    //     /* Obtain the index in the ring buffer */
-    //     uint16_t queue_idx = queue->last_avail % queue->queue_num;
-
-    //    /* Since each buffer index occupies 2 bytes but the memory is aligned
-    //     * with 4 bytes, and the first element of the available queue is
-    //     stored
-    //     * at ram[queue->queue_avail + 1], to acquire the buffer index, it
-    //     * requires the following array index calculation and bit shifting.
-    //     * Check also the `struct virtq_avail` on the spec.
-    //     */
-    //    uint16_t buffer_idx = ram[queue->queue_avail + 1 + queue_idx / 2] >>
-    //                          (16 * (queue_idx % 2));
-
-    //    /* Consume request from the available queue and process the data in
-    //    the
-    //     * descriptor list.
-    //     */
-    //    uint32_t len = 0;
-    //    int result = virtio_vsock_desc_handler(vsock, queue, buffer_idx,
-    //    &len); if (result != 0)
-    //        return virtio_vsock_set_fail(vsock);
-
-    //    /* Write used element information (`struct virtq_used_elem`) to the
-    //    used
-    //     * queue */
-    //    uint32_t vq_used_addr =
-    //        queue->queue_used + 1 + (new_used % queue->queue_num) * 2;
-    //    ram[vq_used_addr] = buffer_idx; /* virtq_used_elem.id  (le32) */
-    //    ram[vq_used_addr + 1] = len;    /* virtq_used_elem.len (le32) */
-    //    queue->last_avail++;
-    //    new_used++;
-    //}
-
-    ///* Check le32 len field of `struct virtq_used_elem` on the spec  */
-    // vsock->ram[queue->queue_used] &= MASK(16); /* Reset low 16 bits to zero
-    // */ vsock->ram[queue->queue_used] |= ((uint32_t) new_used) << 16; /* len
-    // */
-
-    ///* Send interrupt, unless VIRTQ_AVAIL_F_NO_INTERRUPT is set */
-    // if (!(ram[queue->queue_avail] & 1))
-    //     vsock->interrupt_status |= VIRTIO_INT_USED_RING;
 }
 
 uint32_t virtio_vsock_read(virtio_vsock_state_t *vsock, uint32_t addr)

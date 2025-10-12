@@ -12,6 +12,9 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 
+#include <linux/vhost.h>
+#include <sys/ioctl.h>
+
 #if RV32_HAS(SYSTEM) && !RV32_HAS(ELF_LOADER)
 #include <termios.h>
 #include "dtc/libfdt/libfdt.h"
@@ -606,13 +609,57 @@ riscv_t *rv_create(riscv_user_t rv_attr)
     if (attr->data.system.vsock_device) {
 // FIXME: apply platform check when goto upstream
 #if !defined(__linux__)
-       rv_log_error("VirtIO vsock is not supported on non Linux
-       platform"); exit(EXIT_FAILURE);
+        rv_log_error("VirtIO vsock is not supported on non Linux platform");
+        exit(EXIT_FAILURE);
 #else
         uint64_t cid = strtoll(attr->data.system.vsock_device, NULL, 10);
 
         attr->vsock = vsock_new();
-        attr->vsock->socket = -1;
+        // FIXME: split socket by port number
+        // attr->vsock->socket = -1;
+        int sock = socket(AF_VSOCK, SOCK_STREAM | SOCK_NONBLOCK, 0);
+        if (sock < 0) {
+            rv_log_error("socket() failed: %s", strerror(errno));
+            exit(1);
+        }
+        attr->vsock->socket = sock;
+        struct sockaddr_vm sa = {0};
+        int port = 8080;
+        sa.svm_family = AF_VSOCK;
+        sa.svm_cid = VMADDR_CID_HOST; /* listen on host */
+        sa.svm_port = port;
+
+        if (bind(attr->vsock->socket, (struct sockaddr *) &sa, sizeof(sa)) <
+            0) {
+            rv_log_error("bind() failed: %s", strerror(errno));
+            exit(EXIT_FAILURE);
+        }
+
+        // FIXME: Decide how many waiting in connection pending queue
+        if (listen(attr->vsock->socket, 10) < 0) {
+            rv_log_error("listen() failed: %s", strerror(errno));
+            exit(EXIT_FAILURE);
+        }
+
+        rv_log_info("✅ VSOCK server listening on port %d..., sockfd: %d\n",
+                    port, sock);
+
+        // int vhostfd = open("/dev/vhost-vsock", O_RDWR);
+        // if(vhostfd == -1){
+        //     rv_log_error("open() vhost failed: %s", strerror(errno));
+        //     exit(EXIT_FAILURE);
+        //}
+
+        //__u64 guest_cid = 3;
+
+        // int ret = ioctl(vhostfd, VHOST_VSOCK_SET_GUEST_CID, &guest_cid);
+
+        // if(ret == -1){
+        //     rv_log_error("ioctl() failed: %s", strerror(errno));
+        //     exit(EXIT_FAILURE);
+        //}
+
+        attr->vsock->client_fd = -1;
         attr->vsock->tx_cnt = 0;
         attr->vsock->ram = (uint32_t *) attr->mem->mem_base;
         virtio_vsock_init(attr->vsock, cid);

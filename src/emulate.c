@@ -4,6 +4,7 @@
  */
 
 #include <assert.h>
+#include <errno.h>
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -1050,6 +1051,8 @@ static void rv_check_interrupt(riscv_t *rv)
 }
 #endif
 
+struct sockaddr_vm client_sa = {0};
+
 void rv_step(void *arg)
 {
     assert(arg);
@@ -1079,17 +1082,47 @@ void rv_step(void *arg)
          * wants to send data, the host kernel updates the guest's virtqueue and
          * notifies (kicks) the guest OS. TODO: Leverage this once vhost_vsock
          * is supported.
-	 *
-	 * Note: vhost_vsock is only available when KVM is available on the host?
-	 *       Because, the ioeventfd is binding between KVM and vhost-vsock in
-	 *       the host kernel. Thus, other solution like backend thread polling
-	 *       the vsock packet or current approach is a better way.
-	 *       See https://nxw.name/2022/virtio-networking-virtio-net-vhost-net
-	 *       The diagram in the link is clear.
+         *
+         * Note: vhost_vsock is only available when KVM is available on the
+         * host? Because, the ioeventfd is binding between KVM and vhost-vsock
+         * in the host kernel. Thus, other solution like backend thread polling
+         *       the vsock packet or current approach is a better way.
+         *       See
+         * https://nxw.name/2022/virtio-networking-virtio-net-vhost-net The
+         * diagram in the link is clear.
          */
-        extern void virtio_vsock_recv(virtio_vsock_state_t * vsock);
-        if (PRIV(rv)->vsock->socket != -1)
-            virtio_vsock_recv(PRIV(rv)->vsock);
+        // extern void virtio_vsock_recv(virtio_vsock_state_t * vsock);
+        // if (PRIV(rv)->vsock->socket != -1)
+        //     virtio_vsock_recv(PRIV(rv)->vsock);
+
+        extern void virtio_vsock_inject(virtio_vsock_state_t * vsock, int op,
+                                        void *pkt,
+                                        struct sockaddr_vm *client_sa);
+        if (PRIV(rv)->vsock->client_fd != -1)
+            virtio_vsock_inject(PRIV(rv)->vsock, VIRTIO_VSOCK_OP_RW, NULL,
+                                &client_sa);
+
+        // FIXME: cannot check accept every block emulation => performance drop
+        // significantly need to measure, maybe using perf?
+        if (rv->csr_cycle % 1000000 == 0) {
+            socklen_t client_len = sizeof(client_sa);
+            int client_fd = accept(PRIV(rv)->vsock->socket,
+                                   (struct sockaddr *) &client_sa, &client_len);
+            if (client_fd == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
+                // rv_log_info("EAGAIN || EWOULDBLOCK!");
+            } else if (client_fd == -1) {
+                rv_log_error("accept() failed: %s", strerror(errno));
+                exit(1);
+            } else {
+                // inject connection vsock packet to guest
+                rv_log_info("Connecting!");
+                // rv_log_info("cid: %u, port: %u", client_sa.svm_cid,
+                // client_sa.svm_port);
+                PRIV(rv)->vsock->client_fd = client_fd;
+                virtio_vsock_inject(PRIV(rv)->vsock, VIRTIO_VSOCK_OP_REQUEST,
+                                    NULL, &client_sa);
+            }
+        }
 #endif
 
         if (prev && prev->pc_start != last_pc) {

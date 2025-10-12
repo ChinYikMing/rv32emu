@@ -5,6 +5,15 @@
 
 #pragma once
 
+/*
+ * The linux/vm_sockets.h must after sys/socket.h
+ * to pevent incomplete type ‘struct sockaddr’.
+ */
+/* clang-format off */
+#include <sys/socket.h>
+#include <linux/vm_sockets.h>
+/* clang-format on */
+
 #define VIRTIO_VENDOR_ID 0x12345678
 #define VIRTIO_MAGIC_NUMBER 0x74726976
 #define VIRTIO_VERSION 2
@@ -144,6 +153,7 @@ typedef struct {
     int port;
     int peer_port;
     int socket;
+    int client_fd; /* FIXME: use better naming */
     uint8_t recv_buf[1024];
     uint32_t peer_free;
     uint32_t tx_cnt;
@@ -183,6 +193,8 @@ typedef struct {
 #define VIRTIO_VSOCK_SHUTDOWN_F_SEND    1
 
 void virtio_vsock_recv(virtio_vsock_state_t *vsock);
+
+void virtio_vsock_inject(virtio_vsock_state_t *vsock, int op, void *pkt, struct sockaddr_vm *client_sa);
 
 uint32_t virtio_vsock_read(virtio_vsock_state_t *vsock, uint32_t addr);
 

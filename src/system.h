@@ -97,8 +97,8 @@ enum SUPPORTED_MMIO {
             case 0x42: /* Virtio-blk */                     \
                 MMIO_OP(MMIO_VIRTIOBLK, MMIO_R);            \
                 break;                                      \
-            case 0x43: /* Virtio vsock */                     \
-                MMIO_OP(MMIO_VIRTIOVSOCK, MMIO_R);            \
+            case 0x43: /* Virtio vsock */                   \
+                MMIO_OP(MMIO_VIRTIOVSOCK, MMIO_R);          \
                 break;                                      \
             default:                                        \
                 __UNREACHABLE;                              \
@@ -122,8 +122,8 @@ enum SUPPORTED_MMIO {
             case 0x42: /* Virtio-blk */                     \
                 MMIO_OP(MMIO_VIRTIOBLK, MMIO_W);            \
                 break;                                      \
-            case 0x43: /* Virtio vsock */                     \
-                MMIO_OP(MMIO_VIRTIOVSOCK, MMIO_W);            \
+            case 0x43: /* Virtio vsock */                   \
+                MMIO_OP(MMIO_VIRTIOVSOCK, MMIO_W);          \
                 break;                                      \
             default:                                        \
                 __UNREACHABLE;                              \

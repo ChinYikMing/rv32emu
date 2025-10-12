@@ -130,7 +130,7 @@ static bool parse_args(int argc, char **args)
         case 'x':
             if (!strncmp("vblk:", optarg, 5))
                 opt_virtio_blk_img = optarg + 5; /* strlen("vblk:") */
-	    else if (!strncmp("vsock:", optarg, 6))
+            else if (!strncmp("vsock:", optarg, 6))
                 opt_virtio_vsock_cid = optarg + 6; /* strlen("vsock:") */
             else
                 return false;
