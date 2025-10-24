@@ -273,7 +273,7 @@ static void virtio_queue_notify_handler(virtio_vsock_state_t *vsock, int index)
 
     struct virtio_vsock_packet *vsock_pkt = VSOCK_PKT(vsock, vq_desc);
 
-    /* TODO: support seqpacket */
+    /* TODO: support SEQPACKET */
     if (vsock_pkt->hdr.type == VIRTIO_VSOCK_TYPE_SEQPACKET) {
         rv_log_error("Seqpacket is not supported");
         return;
@@ -582,7 +582,7 @@ void virtio_vsock_init(virtio_vsock_state_t *vsock, uint64_t cid)
     vsock->priv = &vsock_configs[0];
     VSOCK_PRIV(vsock)->guest_cid = cid;
 
-    // TODO: support VIRTIO_VSOCK_F_SEQPACKET
+    /* TODO: support VIRTIO_VSOCK_F_SEQPACKET */
     vsock->device_features =
         VIRTIO_VSOCK_F_STREAM | VIRTIO_VSOCK_F_NO_IMPLIED_STREAM;
 }
