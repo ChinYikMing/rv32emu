@@ -41,9 +41,9 @@ function do_buildroot
 function do_linux
 {
     cp -f assets/system/configs/linux.config $SRC_DIR/linux/.config
-    export PATH="$SRC_DIR/buildroot/output/host/bin:$PATH"
-    export CROSS_COMPILE=riscv32-buildroot-linux-gnu-
-    export ARCH=riscv
+    #export PATH="$SRC_DIR/buildroot/output/host/bin:$PATH"
+    #export CROSS_COMPILE=riscv32-buildroot-linux-gnu-
+    #export ARCH=riscv
     pushd $SRC_DIR/linux
     ASSERT make olddefconfig
     ASSERT make $PARALLEL
@@ -59,6 +59,6 @@ function do_simplefs
     cp -f $SRC_DIR/simplefs/simplefs.ko $OUTPUT_DIR
 }
 
-do_buildroot && OK
-do_linux && OK
-do_simplefs && OK
+#do_buildroot && OK
+#do_linux && OK
+#do_simplefs && OK
