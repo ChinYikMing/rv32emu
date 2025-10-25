@@ -146,11 +146,11 @@ SIMPLEFS_DATA_SHA_CMD = $(SHA1SUM)
 
 define download-extract-verify
 $($(T)_DATA):
-	$(Q)$$(call prologue,$$@)
-	$(Q)$$(call download,$(strip $($(T)_DATA_URL)))
-	$(Q)$$(call extract,$($(T)_DATA_DEST),$(notdir $($(T)_DATA_URL)),$($(T)_DATA_SKIP_DIR_LEVEL))
-	$(Q)$$(call verify,$($(T)_DATA_SHA_CMD),$($(T)_DATA_SHA),$($(T)_DATA))
-	$(Q)$$(call epilogue,$(notdir $($(T)_DATA_URL)),$(SHA_FILE1),$(SHA_FILE2))
+	$$(call prologue,$$@)
+	$$(call download,$(strip $($(T)_DATA_URL)))
+	$$(call extract,$($(T)_DATA_DEST),$(notdir $($(T)_DATA_URL)),$($(T)_DATA_SKIP_DIR_LEVEL))
+	$$(call verify,$($(T)_DATA_SHA_CMD),$($(T)_DATA_SHA),$($(T)_DATA))
+	$$(call epilogue,$(notdir $($(T)_DATA_URL)),$(SHA_FILE1),$(SHA_FILE2))
 endef
 
 EXTERNAL_DATA = DOOM QUAKE TIMIDITY BUILDROOT LINUX SIMPLEFS
