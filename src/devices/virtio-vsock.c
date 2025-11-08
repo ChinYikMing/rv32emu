@@ -222,7 +222,7 @@ void virtio_vsock_inject(virtio_vsock_state_t *vsock,
             rx_pkt->hdr.dst_port = vsock->peer_port;
             rx_pkt->hdr.len = recv_cnt;
             rx_pkt->hdr.flags = 0;
-            rx_pkt->hdr.buf_alloc = 4096;
+            rx_pkt->hdr.buf_alloc = 100000;
             rx_pkt->hdr.fwd_cnt = 0;
             memcpy(rx_pkt->data, vsock->recv_buf, recv_cnt);
 
