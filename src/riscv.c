@@ -613,7 +613,7 @@ riscv_t *rv_create(riscv_user_t rv_attr)
         exit(EXIT_FAILURE);
 #else
         uint64_t cid = strtoll(attr->data.system.vsock_device, NULL, 10);
-	rv_log_info("cid: %lu", cid);
+        rv_log_info("cid: %lu", cid);
 
         attr->vsock = vsock_new();
         // FIXME: split socket by port number
@@ -623,7 +623,7 @@ riscv_t *rv_create(riscv_user_t rv_attr)
             rv_log_error("socket() failed: %s", strerror(errno));
             exit(1);
         }
-	rv_log_info("sock: %d", sock);
+        rv_log_info("sock: %d", sock);
         attr->vsock->socket = sock;
         struct sockaddr_vm sa = {0};
         int port = 8080;

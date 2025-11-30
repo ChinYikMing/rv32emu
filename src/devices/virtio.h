@@ -132,6 +132,8 @@ void vblk_delete(virtio_blk_state_t *vblk);
 
 /*--------------------------------- VirtIO vsock ----------------------------*/
 
+#define BUF_ALLOC 64 * 4096 /* 64 pages */
+
 #define VIRTIO_VSOCK_DEV_ID 19
 
 typedef struct {
@@ -149,15 +151,17 @@ typedef struct {
     uint32_t interrupt_status;
     /* supplied by environment */
     uint32_t *ram;
-    uint64_t cid;  /* context ID */
+    uint64_t cid; /* context ID */
     int port;
     int peer_port;
-    int socket; /* listening socket */
+    int socket;    /* listening socket */
     int client_fd; /* FIXME: use better naming */
-    uint8_t recv_buf[1024];
-    uint32_t peer_free;
-    uint32_t tx_cnt;
-    uint32_t pending_cnt;
+    /* buffer management */
+    uint8_t recv_buf[BUF_ALLOC]; /* preallocated recv buffer */
+    uint32_t pending_bytes;
+    uint32_t peer_free; /* peer available buffer */
+    uint32_t tx_cnt;    /* bytes sent to peer (monolithic increasing) */
+    uint32_t fwd_cnt;   /* bytes sent from peer (monolithic increasing) */
     /* implementation-specific */
     void *priv;
 } virtio_vsock_state_t;
@@ -169,32 +173,36 @@ typedef struct {
 #define VIRTIO_VSOCK_F_SEQPACKET (1 << 1)
 #define VIRTIO_VSOCK_F_NO_IMPLIED_STREAM (1 << 2)
 
-#define VIRTIO_VSOCK_OP_INVALID        0
+#define VIRTIO_VSOCK_OP_INVALID 0
 /* Connect operations */
-#define VIRTIO_VSOCK_OP_REQUEST        1
-#define VIRTIO_VSOCK_OP_RESPONSE       2
-#define VIRTIO_VSOCK_OP_RST            3
-#define VIRTIO_VSOCK_OP_SHUTDOWN       4
+#define VIRTIO_VSOCK_OP_REQUEST 1
+#define VIRTIO_VSOCK_OP_RESPONSE 2
+#define VIRTIO_VSOCK_OP_RST 3
+#define VIRTIO_VSOCK_OP_SHUTDOWN 4
 /* To send payload */
-#define VIRTIO_VSOCK_OP_RW             5
+#define VIRTIO_VSOCK_OP_RW 5
 /* Tell the peer our credit info */
-#define VIRTIO_VSOCK_OP_CREDIT_UPDATE  6
+#define VIRTIO_VSOCK_OP_CREDIT_UPDATE 6
 /* Request the peer to send the credit info to us */
 #define VIRTIO_VSOCK_OP_CREDIT_REQUEST 7
 
-#define VIRTIO_VSOCK_TYPE_STREAM    1
+#define VIRTIO_VSOCK_TYPE_STREAM 1
 #define VIRTIO_VSOCK_TYPE_SEQPACKET 2
 
 /*
- * For VIRTIO_VSOCK_OP_SHUTDOWN operation, these hints are stored in field 'flags' in virtio_vsock_hdr.
- * These hints are permanent once sent and successive packets with bits clear do not reset them.
+ * For VIRTIO_VSOCK_OP_SHUTDOWN operation, these hints are stored in field
+ * 'flags' in virtio_vsock_hdr. These hints are permanent once sent and
+ * successive packets with bits clear do not reset them.
  */
 #define VIRTIO_VSOCK_SHUTDOWN_F_RECEIVE 0
-#define VIRTIO_VSOCK_SHUTDOWN_F_SEND    1
+#define VIRTIO_VSOCK_SHUTDOWN_F_SEND 1
 
 void virtio_vsock_recv(virtio_vsock_state_t *vsock);
 
-void virtio_vsock_inject(virtio_vsock_state_t *vsock, int op, void *pkt, struct sockaddr_vm *client_sa);
+void virtio_vsock_inject(virtio_vsock_state_t *vsock,
+                         int op,
+                         void *pkt,
+                         struct sockaddr_vm *client_sa);
 
 uint32_t virtio_vsock_read(virtio_vsock_state_t *vsock, uint32_t addr);
 
