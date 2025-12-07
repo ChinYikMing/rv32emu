@@ -214,6 +214,40 @@ void virtio_vsock_inject(virtio_vsock_state_t *vsock,
         rv_log_trace("Connection establised...");
         virtio_queue_response_handler(vsock, rx_pkt);
         break;
+    case VIRTIO_VSOCK_OP_RST:
+        rx_pkt->hdr.op = VIRTIO_VSOCK_OP_RST;
+        rx_pkt->hdr.type = VIRTIO_VSOCK_TYPE_STREAM;
+        rx_pkt->hdr.src_cid = VMADDR_CID_HOST;
+        rx_pkt->hdr.src_port = client_sa->svm_port;
+        rx_pkt->hdr.dst_cid = vsock->cid;
+        rx_pkt->hdr.dst_port = 2222;  // guest listen port, FIXME: dynamic
+        rx_pkt->hdr.len = 0;
+        rx_pkt->hdr.flags = 0;
+        rx_pkt->hdr.buf_alloc = BUF_ALLOC;
+        rx_pkt->hdr.fwd_cnt = vsock->fwd_cnt;
+
+        virtio_queue_response_handler(vsock, rx_pkt);
+
+	close(vsock->client_fd);
+	vsock->client_fd = -1;
+
+        rv_log_trace("reset from host");
+	break;
+    case VIRTIO_VSOCK_OP_SHUTDOWN:
+        rx_pkt->hdr.op = VIRTIO_VSOCK_OP_SHUTDOWN;
+        rx_pkt->hdr.type = VIRTIO_VSOCK_TYPE_STREAM;
+        rx_pkt->hdr.src_cid = VMADDR_CID_HOST;
+        rx_pkt->hdr.src_port = client_sa->svm_port;
+        rx_pkt->hdr.dst_cid = vsock->cid;
+        rx_pkt->hdr.dst_port = 2222;  // guest listen port, FIXME: dynamic
+        rx_pkt->hdr.len = 0;
+        rx_pkt->hdr.flags = 0;
+        rx_pkt->hdr.buf_alloc = BUF_ALLOC;
+        rx_pkt->hdr.fwd_cnt = vsock->fwd_cnt;
+
+        virtio_queue_response_handler(vsock, rx_pkt);
+        rv_log_trace("shutdown from host");
+        break;
     case VIRTIO_VSOCK_OP_RW:
         /* hostOS to guestOS */
         if (vsock->pending_bytes) {
@@ -230,6 +264,14 @@ void virtio_vsock_inject(virtio_vsock_state_t *vsock,
                                 ARRAY_SIZE(vsock->recv_buf), MSG_DONTWAIT);
         if (recv_cnt == -1) {
             if (errno != EAGAIN && errno != EWOULDBLOCK) {
+                switch(errno){
+			case ENOTCONN:
+                virtio_vsock_inject(vsock, VIRTIO_VSOCK_OP_RST, NULL,
+                                    client_sa);
+				break;
+			default:
+				break;
+		}
                 rv_log_error("recv() failed: %s", strerror(errno));
             }
             return;
@@ -438,7 +480,11 @@ static void virtio_queue_notify_handler(virtio_vsock_state_t *vsock, int index)
                 if ((ret =
                          send(vsock->client_fd,
                               (void *) ((uintptr_t) vsock->ram + vq_desc->addr),
-                              vq_desc->len, 0) < 0)) {
+                              vq_desc->len, MSG_NOSIGNAL) < 0)) {
+			/* peer might close connection early */
+			if(errno == EPIPE){
+				break;
+			}
                     rv_log_error("send() failed: %s", strerror(errno));
                     break;
                 };
