@@ -199,9 +199,10 @@ void virtio_vsock_inject(virtio_vsock_state_t *vsock,
         vsock->peer_port = 2222;  // guest listen port, FIXME: dynamic
         vsock->port = client_sa->svm_port;
 
-	/* FIXME: need a way to get the initial buf_alloc of the peer when guestOS initiates the connection */
-	/* It is hardcoded right now */
-	vsock->peer_free = 64 * 1024;
+        /* FIXME: need a way to get the initial buf_alloc of the peer when
+         * guestOS initiates the connection */
+        /* It is hardcoded right now */
+        vsock->peer_free = 64 * 1024;
 
         virtio_queue_response_handler(vsock, rx_pkt);
         break;
@@ -224,15 +225,16 @@ void virtio_vsock_inject(virtio_vsock_state_t *vsock,
         rx_pkt->hdr.len = 0;
         rx_pkt->hdr.flags = 0;
         rx_pkt->hdr.buf_alloc = BUF_ALLOC;
-        rx_pkt->hdr.fwd_cnt = vsock->fwd_cnt;
+        rx_pkt->hdr.fwd_cnt = 0;
 
         virtio_queue_response_handler(vsock, rx_pkt);
 
-	close(vsock->client_fd);
-	vsock->client_fd = -1;
+        close(vsock->client_fd);
+        vsock->client_fd = -1;
+        vsock->tx_cnt = 0;
 
         rv_log_trace("reset from host");
-	break;
+        break;
     case VIRTIO_VSOCK_OP_SHUTDOWN:
         rx_pkt->hdr.op = VIRTIO_VSOCK_OP_SHUTDOWN;
         rx_pkt->hdr.type = VIRTIO_VSOCK_TYPE_STREAM;
@@ -243,7 +245,7 @@ void virtio_vsock_inject(virtio_vsock_state_t *vsock,
         rx_pkt->hdr.len = 0;
         rx_pkt->hdr.flags = 0;
         rx_pkt->hdr.buf_alloc = BUF_ALLOC;
-        rx_pkt->hdr.fwd_cnt = vsock->fwd_cnt;
+        rx_pkt->hdr.fwd_cnt = 0;
 
         virtio_queue_response_handler(vsock, rx_pkt);
         rv_log_trace("shutdown from host");
@@ -251,39 +253,54 @@ void virtio_vsock_inject(virtio_vsock_state_t *vsock,
     case VIRTIO_VSOCK_OP_RW:
         /* hostOS to guestOS */
         if (vsock->pending_bytes) {
-            /* Wait the peer has more buffer */
-            if (vsock->peer_free < vsock->pending_bytes) {
-                rv_log_trace("peer free buffer: %u, required: %u",
-                             vsock->peer_free, vsock->pending_bytes);
+            if (vsock->pending_bytes > vsock->peer_free) {
+                /* keep credit request update until peer update */
+                // virtio_vsock_inject(vsock, VIRTIO_VSOCK_OP_CREDIT_REQUEST,
+                // NULL,
+                //                     client_sa);
                 return;
             }
+
             goto resend;
         }
 
-        ssize_t recv_cnt = recv(vsock->client_fd, vsock->recv_buf,
-                                ARRAY_SIZE(vsock->recv_buf), MSG_DONTWAIT);
+        // ssize_t recv_cnt = recv(vsock->client_fd, vsock->recv_buf,
+        //                        ARRAY_SIZE(vsock->recv_buf), MSG_DONTWAIT);
+        ssize_t recv_cnt =
+            recv(vsock->client_fd, vsock->recv_buf, 4096, MSG_DONTWAIT);
         if (recv_cnt == -1) {
             if (errno != EAGAIN && errno != EWOULDBLOCK) {
-                switch(errno){
-			case ENOTCONN:
-                virtio_vsock_inject(vsock, VIRTIO_VSOCK_OP_RST, NULL,
-                                    client_sa);
-				break;
-			default:
-				break;
-		}
+                switch (errno) {
+                case ENOTCONN:
+                    virtio_vsock_inject(vsock, VIRTIO_VSOCK_OP_RST, NULL,
+                                        client_sa);
+                    break;
+                default:
+                    break;
+                }
                 rv_log_error("recv() failed: %s", strerror(errno));
             }
             return;
         }
 
-        /* Wait the peer has more buffer */
+        /* Wait for the peer to have more buffer */
         if (vsock->peer_free < recv_cnt) {
             vsock->pending_bytes = recv_cnt;
-            rv_log_trace("peer has no enough free buffer");
+            rv_log_fatal(
+                "peer has no enough free buffer, peer free: %u, needed: %u, "
+                "acc burst: %u",
+                vsock->peer_free, recv_cnt, vsock->pending_bytes);
+
+            /* request credit update */
+            virtio_vsock_inject(vsock, VIRTIO_VSOCK_OP_CREDIT_REQUEST, NULL,
+                                client_sa);
             return;
         }
+
         vsock->pending_bytes = recv_cnt;
+
+        // might have a burst send
+        vsock->peer_free -= recv_cnt;
 
         if (vsock->pending_bytes > 0) {
         resend:
@@ -301,17 +318,17 @@ void virtio_vsock_inject(virtio_vsock_state_t *vsock,
             rx_pkt->hdr.len = vsock->pending_bytes;
             rx_pkt->hdr.flags = 0;
             rx_pkt->hdr.buf_alloc = BUF_ALLOC;
-            rx_pkt->hdr.fwd_cnt = vsock->fwd_cnt;
+            rx_pkt->hdr.fwd_cnt = 0;
             memcpy(rx_pkt->data, vsock->recv_buf, vsock->pending_bytes);
-            vsock->recv_buf[vsock->pending_bytes] = 0;
 
-            vsock->tx_cnt += vsock->pending_bytes;
+            rv_log_trace("vsock->tx_cnt: %u", vsock->tx_cnt);
+	    vsock->tx_cnt += vsock->pending_bytes;
+            vsock->pending_bytes = 0;
+
             virtio_queue_response_handler(vsock, rx_pkt);
             free(rx_pkt);
 
-            rv_log_trace("from recv push buffer: %s", vsock->recv_buf);
-
-            vsock->pending_bytes = 0;
+            // rv_log_trace("from recv push buffer: %s", vsock->recv_buf);
         } else if (vsock->pending_bytes == 0) { /* EOF */
             // TODO:
             // Host disconnected
@@ -331,10 +348,26 @@ void virtio_vsock_inject(virtio_vsock_state_t *vsock,
         rx_pkt->hdr.len = 0;
         rx_pkt->hdr.flags = 0;
         rx_pkt->hdr.buf_alloc = BUF_ALLOC;
-        rx_pkt->hdr.fwd_cnt = vsock->fwd_cnt;
+        rx_pkt->hdr.fwd_cnt = 0;
 
         virtio_queue_response_handler(vsock, rx_pkt);
         rv_log_trace("CREDIT UPDATE from host");
+        break;
+    case VIRTIO_VSOCK_OP_CREDIT_REQUEST:
+        /* Pair with TX's VIRTIO_VSOCK_OP_CREDIT_UPDATE */
+        rx_pkt->hdr.op = VIRTIO_VSOCK_OP_CREDIT_REQUEST;
+        rx_pkt->hdr.type = VIRTIO_VSOCK_TYPE_STREAM;
+        rx_pkt->hdr.src_cid = VMADDR_CID_HOST;
+        rx_pkt->hdr.src_port = client_sa->svm_port;
+        rx_pkt->hdr.dst_cid = vsock->cid;
+        rx_pkt->hdr.dst_port = 2222;  // guest listen port, FIXME: dynamic
+        rx_pkt->hdr.len = 0;
+        rx_pkt->hdr.flags = 0;
+        rx_pkt->hdr.buf_alloc = BUF_ALLOC;
+        rx_pkt->hdr.fwd_cnt = 0;
+
+        virtio_queue_response_handler(vsock, rx_pkt);
+        rv_log_trace("CREDIT REQUEST from host");
         break;
     default:
         rv_log_error("Unknown vsock operation on RX");
@@ -442,8 +475,8 @@ static void virtio_queue_notify_handler(virtio_vsock_state_t *vsock, int index)
                                 &client_sa);
             break;
         case VIRTIO_VSOCK_OP_RESPONSE:
-	    /* FIXME: what is the usage here? */
-	    break;
+            /* FIXME: what is the usage here? */
+            break;
         case VIRTIO_VSOCK_OP_RST:
             // FIXME: cannot send RST packet to socat, so socat does not show
             // error: Connection reset by peer The close() is shutdown the socat
@@ -458,6 +491,7 @@ static void virtio_queue_notify_handler(virtio_vsock_state_t *vsock, int index)
 
             close(vsock->client_fd);
             vsock->client_fd = -1;
+            vsock->tx_cnt = 0;
             break;
         case VIRTIO_VSOCK_OP_SHUTDOWN:
             rv_log_trace("shutdown...");
@@ -481,14 +515,13 @@ static void virtio_queue_notify_handler(virtio_vsock_state_t *vsock, int index)
                          send(vsock->client_fd,
                               (void *) ((uintptr_t) vsock->ram + vq_desc->addr),
                               vq_desc->len, MSG_NOSIGNAL) < 0)) {
-			/* peer might close connection early */
-			if(errno == EPIPE){
-				break;
-			}
+                    /* peer might close connection early */
+                    if (errno == EPIPE) {
+                        break;
+                    }
                     rv_log_error("send() failed: %s", strerror(errno));
                     break;
                 };
-                vsock->fwd_cnt += ret;
 
                 if (ret != vq_desc->len) {
                     // rv_log_trace("ret: %zu, len: %u", ret, vq_desc->len);

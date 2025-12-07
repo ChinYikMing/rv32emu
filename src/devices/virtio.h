@@ -160,8 +160,7 @@ typedef struct {
     uint8_t recv_buf[BUF_ALLOC]; /* preallocated recv buffer */
     uint32_t pending_bytes;
     uint32_t peer_free; /* peer available buffer */
-    uint32_t tx_cnt;    /* bytes sent to peer (monolithic increasing) */
-    uint32_t fwd_cnt;   /* bytes sent from peer (monolithic increasing) */
+    uint32_t tx_cnt;    /* bytes sent from host to guest/peer (monolithic increasing) */
     /* implementation-specific */
     void *priv;
 } virtio_vsock_state_t;
