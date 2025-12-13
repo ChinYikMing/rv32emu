@@ -55,6 +55,11 @@
             interrupts-extended = <&cpu0_intc 9>;
             riscv,ndev = <31>;
         };
+
+
+
+
+
         serial@4000000 {
             compatible = "ns16550";
             reg = <0x4000000 0x100000>;

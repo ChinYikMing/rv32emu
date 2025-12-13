@@ -64,7 +64,7 @@ To maintain a uniform style across languages, run:
 Device Tree Source (and Include) must be clean, consistent, and portable. The following `dtsfmt` rules(check `.dtsfmtrc.toml` file) are enforced project-wide:
 * Use spaces for indentation.
 * Indent with 4 spaces.
-* Use Multi-line comment.
+* Use multi-line comments.
 * Use Unix-style line endings (LF).
 * Remove trailing whitespace at the end of lines.
 * Ensure the file ends with a newline.

@@ -64,8 +64,8 @@ done < <(git ls-files -- '*.dts' '*.dtsi')
 if [ ${#DTS_SOURCES[@]} -gt 0 ]; then
     echo "Checking DTS/DTSI files..."
     DTS_FORMAT_EXIT=0
-    for dts_src in ${DTS_SOURCES[@]}; do
-        dtsfmt --check ${dts_src}
+    for dts_src in "${DTS_SOURCES[@]}"; do
+        dtsfmt --check "${dts_src}"
         DTS_FORMAT_EXIT=$((DTS_FORMAT_EXIT + $?))
     done
 else
