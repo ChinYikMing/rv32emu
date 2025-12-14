@@ -4,6 +4,12 @@
  */
 
 #pragma once
+
+/* for system-mode reboot */
+#if RV32_HAS(SYSTEM_MMIO)
+#include <setjmp.h>
+#endif
+
 #include <stdbool.h>
 #include <string.h>
 
@@ -411,6 +417,11 @@ struct riscv_internal {
      * TIME would be independent of CPU frequency scaling or sleep states.
      */
     uint64_t timer_offset;
+
+#if RV32_HAS(SYSTEM_MMIO)
+    /* Jump buffer for restarting the main loop after a Linux guestOS reboot */
+    jmp_buf reboot_jmp;
+#endif
 #endif
 
 #if RV32_HAS(ARCH_TEST)
