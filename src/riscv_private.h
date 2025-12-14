@@ -4,6 +4,7 @@
  */
 
 #pragma once
+#include <setjmp.h>
 #include <stdbool.h>
 #include <string.h>
 
@@ -293,6 +294,9 @@ struct riscv_internal {
      * Separate from dTLB for better hit rates and simpler permission checks.
      */
     tlb_entry_t itlb[TLB_SIZE];
+
+    /* Jump buffer for restarting the main loop after a reboot */
+    jmp_buf reboot_jmp;
 #endif
 
 #if RV32_HAS(ARCH_TEST)
