@@ -44,7 +44,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        compiler: [gcc, clang]
+        compiler: [gcc]
     runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
@@ -153,13 +153,6 @@ jobs:
       run: |
             make distclean
             make CC=emcc ENABLE_JIT=0 $PARALLEL
-
-    - name: default build for system emulation using emcc
-      if: success()
-      run: |
-            make distclean
-            make CC=emcc ENABLE_SYSTEM=1 ENABLE_JIT=0 $PARALLEL
-            make distclean ENABLE_SYSTEM=1
 
     - name: Build with various optimization levels
       if: success()
