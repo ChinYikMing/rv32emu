@@ -69,7 +69,6 @@ jobs:
 
     - name: Cache EMSDK
       id: cache-emsdk
-        actions-cache-folder: 'emsdk-cache'
       uses: actions/cache@v4
       with:
         path: ${{ github.workspace }}/emsdk-cache
