@@ -151,14 +151,15 @@ jobs:
     - name: default build using emcc
       if: success()
       run: |
+            emcc --clear-cache
             make distclean
-            make CC=emcc ENABLE_JIT=0 ENABLE_SDL=0 $PARALLEL
+            make CC=emcc ENABLE_JIT=0 ENABLE_SDL=1 $PARALLEL
 
     - name: default build for system emulation using emcc
       if: success()
       run: |
             make distclean
-            make CC=emcc ENABLE_SYSTEM=1 ENABLE_JIT=0 ENABLE_SDL=0 $PARALLEL
+            make CC=emcc ENABLE_SYSTEM=1 ENABLE_JIT=0 ENABLE_SDL=1 $PARALLEL
             make distclean ENABLE_SYSTEM=1
 
     - name: Build with various optimization levels
