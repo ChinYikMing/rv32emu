@@ -31,7 +31,6 @@ CFLAGS_emcc += -sINITIAL_MEMORY=2GB \
 	       -sALLOW_MEMORY_GROWTH \
 	       -s"EXPORTED_FUNCTIONS=$(EXPORTED_FUNCS)" \
 	       -sSTACK_SIZE=4MB \
-	       -sUSE_PTHREADS \
 	       -sPTHREAD_POOL_SIZE=navigator.hardwareConcurrency \
 	       --embed-file build/timidity@/etc/timidity \
 	       -DMEM_SIZE=0x20000000 \
