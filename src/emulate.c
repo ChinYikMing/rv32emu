@@ -1557,6 +1557,7 @@ void dump_registers(riscv_t *rv, char *out_file_path)
 
 
 
+
     if (out_file_path[0] != '-')
         fclose(f);
 }
