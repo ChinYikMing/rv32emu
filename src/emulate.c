@@ -1545,13 +1545,11 @@ void dump_registers(riscv_t *rv, char *out_file_path)
         rv_log_error("Cannot open registers output file");
         return;
     }
-
     fprintf(f, "{\n");
     for (unsigned i = 0; i < N_RV_REGS; i++) {
         char *comma = i < N_RV_REGS - 1 ? "," : "";
         fprintf(f, "  \"x%d\": %u%s\n", i, rv->X[i], comma);
     }
-
     fprintf(f, "}\n");
 
     if (out_file_path[0] != '-')
