@@ -21,7 +21,7 @@ ifeq ($(call has, SDL), 1)
 # Disable STRICT mode to avoid -Werror in SDL2_mixer port compilation.
 # The emscripten-ports/SDL2_mixer was archived in Jan 2024 and has warnings
 # in music_modplug.c that become fatal errors under STRICT mode.
-CFLAGS_emcc += -sSTRICT=0 -sUSE_SDL=2 -sSDL2_MIXER_FORMATS=wav,mid -sUSE_SDL_MIXER=2
+CFLAGS_emcc += -sSTRICT=0 -sUSE_SDL=2 -sSDL2_MIXER_FORMATS=wav,mid -sUSE_SDL_MIXER=2 -pthread
 OBJS_EXT += syscall_sdl.o
 LDFLAGS += -pthread
 endif
