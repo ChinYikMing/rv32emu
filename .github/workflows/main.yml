@@ -67,6 +67,14 @@ jobs:
         path: ${{ github.workspace }}/toolchain
         key: ${{ runner.os }}-${{ runner.arch }}-riscv-toolchain-${{ hashFiles('.ci/riscv-toolchain-install.sh') }}
 
+    - name: Cache EMSDK
+      id: cache-emsdk
+        actions-cache-folder: 'emsdk-cache'
+      uses: actions/cache@v4
+      with:
+        path: ${{ github.workspace }}/emsdk-cache
+        key: ${{ runner.os }}-${{ runner.arch }}-emsdk
+
     - name: Install dependencies
       run: |
             set +e  # Disable errexit
@@ -114,6 +122,7 @@ jobs:
       with:
         compiler: ${{ matrix.compiler }}
     - name: Setup emsdk
+      if: steps.cache-emsdk.outputs.cache-hit != 'true'
       uses: mymindstorm/setup-emsdk@v14
       with:
         version: 3.1.51
