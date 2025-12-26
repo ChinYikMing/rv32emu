@@ -152,13 +152,14 @@ jobs:
       if: success()
       run: |
             make distclean
-            EMCC_CORES=1 make CC=emcc ENABLE_JIT=0 -j$PARALLEL
+            embuilder build sdl2 sdl2_mixer  # Pre-cache ports
+            make CC=emcc ENABLE_JIT=0 -j$PARALLEL
 
     - name: default build for system emulation using emcc
       if: success()
       run: |
             make distclean
-            EMCC_CORES=1 make CC=emcc ENABLE_SYSTEM=1 ENABLE_JIT=0 -j$PARALLEL
+            make CC=emcc ENABLE_SYSTEM=1 ENABLE_JIT=0 -j$PARALLEL
             make distclean ENABLE_SYSTEM=1
 
     - name: Build with various optimization levels
