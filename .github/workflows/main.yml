@@ -115,11 +115,11 @@ jobs:
       if: success()
       run: |
             make distclean
-            make CC=emcc ENABLE_JIT=0 $PARALLEL
+            make CC=emcc ENABLE_JIT=0 -j1
 
     - name: default build for system emulation using emcc
       if: success()
       run: |
             make distclean
-            make CC=emcc ENABLE_SYSTEM=1 ENABLE_JIT=0 $PARALLEL
+            make CC=emcc ENABLE_SYSTEM=1 ENABLE_JIT=0 -j1
             make distclean ENABLE_SYSTEM=1
