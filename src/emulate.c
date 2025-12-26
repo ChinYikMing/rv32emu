@@ -1551,6 +1551,7 @@ void dump_registers(riscv_t *rv, char *out_file_path)
         char *comma = i < N_RV_REGS - 1 ? "," : "";
         fprintf(f, "  \"x%d\": %u%s\n", i, rv->X[i], comma);
     }
+
     fprintf(f, "}\n");
 
     if (out_file_path[0] != '-')
