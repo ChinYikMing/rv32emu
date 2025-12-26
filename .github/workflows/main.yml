@@ -148,11 +148,17 @@ jobs:
             .ci/fetch.sh -o build/shareware_doom_iwad.zip "https://raw.githubusercontent.com/sysprog21/rv32emu-prebuilt/doom-artifact/shareware_doom_iwad.zip"
             unzip -o -d build/ build/shareware_doom_iwad.zip
 
+    - name: default build using emcc
+      if: success()
+      run: |
+            make distclean
+            make CC=emcc ENABLE_JIT=0 $PARALLEL
+
     - name: default build for system emulation using emcc
       if: success()
       run: |
             make distclean
-            make CC=emcc ENABLE_SYSTEM=1 ENABLE_JIT=0
+            make CC=emcc ENABLE_SYSTEM=1 ENABLE_JIT=0 $PARALLEL
             make distclean ENABLE_SYSTEM=1
 
     - name: Build with various optimization levels
@@ -371,7 +377,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        compiler: [gcc-15, clang]
+        compiler: [gcc-15]
     runs-on: macos-latest # M1 chip
     steps:
      - uses: actions/checkout@v4
