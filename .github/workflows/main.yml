@@ -69,7 +69,7 @@ jobs:
 
     - name: Install dependencies
       run: |
-             sudo apt install dtc
+             sudo apt install device-tree-compiler
 
     - name: Install compiler
       id: install_cc
