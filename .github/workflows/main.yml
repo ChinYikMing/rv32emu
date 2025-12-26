@@ -118,6 +118,7 @@ jobs:
       uses: mymindstorm/setup-emsdk@v14
       with:
         version: 3.1.51
+        actions-cache-folder: 'emsdk-cache'
     - name: Set parallel jobs variable
       run: |
             echo "PARALLEL=-j$(nproc)" >> "$GITHUB_ENV"
@@ -152,13 +153,13 @@ jobs:
       if: success()
       run: |
             make distclean
-            make CC=emcc ENABLE_JIT=0 ENABLE_SDL=1 $PARALLEL
+            EM_CACHE="$(mktemp -d)" make CC=emcc ENABLE_JIT=0 ENABLE_SDL=1 $PARALLEL
 
     - name: default build for system emulation using emcc
       if: success()
       run: |
             make distclean
-            make CC=emcc ENABLE_SYSTEM=1 ENABLE_JIT=0 ENABLE_SDL=1 $PARALLEL
+            EM_CACHE="$(mktemp -d)" make CC=emcc ENABLE_SYSTEM=1 ENABLE_JIT=0 ENABLE_SDL=1 $PARALLEL
             make distclean ENABLE_SYSTEM=1
 
     - name: Build with various optimization levels
@@ -428,6 +429,7 @@ jobs:
        uses: mymindstorm/setup-emsdk@v14
        with:
          version: 3.1.51
+         actions-cache-folder: 'emsdk-cache'
      - name: Set parallel jobs variable
        run: |
              echo "PARALLEL=-j$(sysctl -n hw.logicalcpu)" >> "$GITHUB_ENV"
