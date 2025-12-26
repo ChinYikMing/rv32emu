@@ -67,6 +67,10 @@ jobs:
         path: ${{ github.workspace }}/toolchain
         key: ${{ runner.os }}-${{ runner.arch }}-riscv-toolchain-${{ hashFiles('.ci/riscv-toolchain-install.sh') }}
 
+    - name: Install dependencies
+       run: |
+             apt install dtc
+
     - name: Install compiler
       id: install_cc
       uses: rlalik/setup-cpp-compiler@master
