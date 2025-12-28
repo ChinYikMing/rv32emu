@@ -258,8 +258,10 @@ void virtio_vsock_inject(virtio_vsock_state_t *vsock,
                 switch (errno) {
                 case ENOTCONN:
                     rv_log_trace("host client is disconnected");
-                    virtio_vsock_inject(vsock, VIRTIO_VSOCK_OP_RST, NULL,
-                                        guest_sa);
+                    //virtio_vsock_inject(vsock, VIRTIO_VSOCK_OP_RST, NULL,
+                    //                    guest_sa);
+                    //vsock->peer_free = 0;
+                    //vsock->tx_cnt = 0;
                     break;
                 default:
                     break;
@@ -474,6 +476,15 @@ static void virtio_queue_notify_handler(virtio_vsock_state_t *vsock, int index)
 	    }
             break;
         case VIRTIO_VSOCK_OP_SHUTDOWN:
+	    // FIXME: the vsock->host_client_fd is global variable, it can be
+	    // easily rewrite when multiple client is connectin
+
+	    // FIXME: this check is not very accurate for new client fd
+	    if(vsock->peer_free) { // newly created client but old shutdown PKT
+	    	rv_log_info("new client fd but old shutdown PKT, so ignore it");
+		break;
+	    }
+
             rv_log_trace("shutdown...");
             shutdown_how = SHUT_RD;
             if (VSOCK_PKT_HDR(vsock, vq_desc).flags &
