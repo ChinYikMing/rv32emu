@@ -1094,7 +1094,7 @@ void rv_step(void *arg)
         extern void virtio_vsock_inject(virtio_vsock_state_t * vsock, int op,
                                         void *pkt,
                                         struct sockaddr_vm *guest_sa);
-	    // FIXME: hardcode 4096
+
         if (PRIV(rv)->vsock->peer_free > VSOCK_CHUNK_SIZE) {
                 virtio_vsock_inject(PRIV(rv)->vsock, VIRTIO_VSOCK_OP_RW, NULL,
                                     &guest_sa);

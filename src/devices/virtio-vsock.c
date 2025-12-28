@@ -229,11 +229,8 @@ void virtio_vsock_inject(virtio_vsock_state_t *vsock,
         virtio_queue_response_handler(vsock, rx_pkt);
 
         close(vsock->host_client_fd);
-        vsock->host_client_fd = -1;
         vsock->peer_free = 0;
         vsock->tx_cnt = 0;
-
-        rv_log_trace("reset from host");
         break;
     case VIRTIO_VSOCK_OP_SHUTDOWN:
         rx_pkt->hdr.op = VIRTIO_VSOCK_OP_SHUTDOWN;
@@ -255,18 +252,22 @@ void virtio_vsock_inject(virtio_vsock_state_t *vsock,
         // ssize_t recv_cnt = recv(vsock->host_client_fd, vsock->recv_buf,
         //                        ARRAY_SIZE(vsock->recv_buf), MSG_DONTWAIT);
         ssize_t recv_cnt =
-            recv(vsock->host_client_fd, vsock->recv_buf, VSOCK_CHUNK_SIZE, MSG_DONTWAIT | MSG_WAITALL);
+            recv(vsock->host_client_fd, vsock->recv_buf, VSOCK_CHUNK_SIZE, MSG_DONTWAIT);
         if (recv_cnt == -1) {
             if (errno != EAGAIN && errno != EWOULDBLOCK) {
                 switch (errno) {
                 case ENOTCONN:
+                    rv_log_trace("host client is disconnected");
                     virtio_vsock_inject(vsock, VIRTIO_VSOCK_OP_RST, NULL,
                                         guest_sa);
                     break;
                 default:
                     break;
                 }
-                rv_log_error("recv() failed: %s", strerror(errno));
+                rv_log_error("recv() failed: %s, errno: %d, peer_free: %u", strerror(errno), errno, vsock->peer_free);
+		//if(vsock->peer_free){
+		//	exit(0);
+		//}
             }
             return;
         }
@@ -427,7 +428,7 @@ static void virtio_queue_notify_handler(virtio_vsock_state_t *vsock, int index)
 
                 /* Send VIRTIO_VSOCK_OP_RST if connecting fails  */
                 resp.hdr.op = VIRTIO_VSOCK_OP_RST;
-                virtio_vsock_inject(vsock, VIRTIO_VSOCK_OP_RESPONSE, &resp,
+                virtio_vsock_inject(vsock, VIRTIO_VSOCK_OP_RST, &resp,
                                     &guest_sa);
                 return;
             }
@@ -453,6 +454,9 @@ static void virtio_queue_notify_handler(virtio_vsock_state_t *vsock, int index)
             // error: Connection reset by peer The close() is shutdown the socat
             // gracefully, so no RST packet as well..
 
+	    // FIXME: the vsock->host_client_fd is global variable, it can be
+	    // easily rewrite when multiple client is connectin
+
             // FIXME: this need to be fixed?
             /* RST(reset) packet comes after FIN(shutdown) packet,
              * thus the close() should be careful to not close newly created
@@ -460,10 +464,14 @@ static void virtio_queue_notify_handler(virtio_vsock_state_t *vsock, int index)
              */
             rv_log_trace("Resetting...");
 
+	    // FIXME: this check is not very accurate for new client fd
+	    if(vsock->peer_free) { // newly created client but old reset PKT
+	    	rv_log_info("new client fd but old reset PKT, so ignore it");
+		//exit(1);
+	    } else {
             close(vsock->host_client_fd);
-            vsock->host_client_fd = -1;
-            vsock->peer_free = 0;
-            vsock->tx_cnt = 0;
+	    vsock->host_client_fd = -1;
+	    }
             break;
         case VIRTIO_VSOCK_OP_SHUTDOWN:
             rv_log_trace("shutdown...");
@@ -479,6 +487,9 @@ static void virtio_queue_notify_handler(virtio_vsock_state_t *vsock, int index)
             break;
         case VIRTIO_VSOCK_OP_RW:
             /* guestOS to hostOS */
+	    if(vsock->host_client_fd == -1)
+		    break;
+
             while (vq_desc->flags & VIRTIO_DESC_F_NEXT) {
                 vq_desc = (struct virtq_desc *) &vsock
                               ->ram[queue->queue_desc + vq_desc->next * 4];
@@ -489,6 +500,7 @@ static void virtio_queue_notify_handler(virtio_vsock_state_t *vsock, int index)
                               vq_desc->len, MSG_NOSIGNAL) < 0)) {
                     /* peer might close connection early */
                     if (errno == EPIPE) {
+			rv_log_info("EPIPE here");
                         break;
                     }
                     rv_log_error("send() failed: %s", strerror(errno));
@@ -686,6 +698,8 @@ void virtio_vsock_init(virtio_vsock_state_t *vsock, uint64_t cid)
     vsock->cid = cid;
     vsock->priv = &vsock_configs[0];
     VSOCK_PRIV(vsock)->guest_cid = cid;
+
+    vsock->host_client_fd = -1;
 
     /* TODO: support VIRTIO_VSOCK_F_SEQPACKET */
     vsock->device_features =
