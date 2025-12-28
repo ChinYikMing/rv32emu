@@ -1080,8 +1080,8 @@ void rv_step(void *arg)
          * vhost_vsock kernel module and using some ioctl() calls, the host OS
          * can access the guest OS's virtio-vsock memory. Then, when the host
          * wants to send data, the host kernel updates the guest's virtqueue and
-         * notifies (kicks) the guest OS. TODO: Leverage this once vhost_vsock
-         * is supported.
+         * notifies (kicks) the guest OS.
+	 * TODO: Leverage this once vhost_vsock is supported.
          *
          * Note: vhost_vsock is only available when KVM is available on the
          * host? Because, the ioeventfd is binding between KVM and vhost-vsock
@@ -1091,321 +1091,323 @@ void rv_step(void *arg)
          * https://nxw.name/2022/virtio-networking-virtio-net-vhost-net The
          * diagram in the link is clear.
          */
-        // extern void virtio_vsock_recv(virtio_vsock_state_t * vsock);
-        // if (PRIV(rv)->vsock->socket != -1)
-        //     virtio_vsock_recv(PRIV(rv)->vsock);
-
         extern void virtio_vsock_inject(virtio_vsock_state_t * vsock, int op,
                                         void *pkt,
                                         struct sockaddr_vm *client_sa);
-        if (PRIV(rv)->vsock->client_fd != -1)
-            virtio_vsock_inject(PRIV(rv)->vsock, VIRTIO_VSOCK_OP_RW, NULL,
-                                &client_sa);
+	    // FIXME: hardcode 4096
+        if (PRIV(rv)->vsock->peer_free > CHUNK_SIZE) {
+                virtio_vsock_inject(PRIV(rv)->vsock, VIRTIO_VSOCK_OP_RW, NULL,
+                                    &client_sa);
+	}
 
-        // FIXME: cannot check accept every block emulation => performance drop
-        // significantly need to measure, maybe using perf?
-        if (rv->csr_cycle % 1000000 == 0) {
-            socklen_t client_len = sizeof(client_sa);
-            int client_fd = accept(PRIV(rv)->vsock->socket,
-                                   (struct sockaddr *) &client_sa, &client_len);
-            if (client_fd == -1 && (errno == EAGAIN || errno == EWOULDBLOCK)) {
-                // rv_log_info("EAGAIN || EWOULDBLOCK!");
-            } else if (client_fd == -1) {
-                rv_log_error("accept() failed: %s", strerror(errno));
-                exit(1);
-            } else {
-                // inject connection vsock packet to guest
-                rv_log_info("Connecting!");
-                // rv_log_info("cid: %u, port: %u", client_sa.svm_cid,
-                // client_sa.svm_port);
-                PRIV(rv)->vsock->client_fd = client_fd;
-                virtio_vsock_inject(PRIV(rv)->vsock, VIRTIO_VSOCK_OP_REQUEST,
-                                    NULL, &client_sa);
+            // FIXME: cannot check accept every block emulation => performance
+            // drop significantly need to measure, maybe using perf?
+            if (rv->csr_cycle % 1000000 == 0) {
+                socklen_t client_len = sizeof(client_sa);
+                int client_fd =
+                    accept(PRIV(rv)->vsock->socket,
+                           (struct sockaddr *) &client_sa, &client_len);
+                if (client_fd == -1 &&
+                    (errno == EAGAIN || errno == EWOULDBLOCK)) {
+                    // rv_log_info("EAGAIN || EWOULDBLOCK!");
+                } else if (client_fd == -1) {
+                    rv_log_error("accept() failed: %s", strerror(errno));
+                    exit(1);
+                } else {
+                    // inject connection vsock packet to guest
+                    rv_log_info("Connecting!");
+                    // rv_log_info("cid: %u, port: %u", client_sa.svm_cid,
+                    // client_sa.svm_port);
+                    PRIV(rv)->vsock->client_fd = client_fd;
+                    virtio_vsock_inject(PRIV(rv)->vsock,
+                                        VIRTIO_VSOCK_OP_REQUEST, NULL,
+                                        &client_sa);
+                }
             }
-        }
 #endif
 
-        if (prev && prev->pc_start != last_pc) {
-            /* update previous block */
+            if (prev && prev->pc_start != last_pc) {
+                /* update previous block */
 #if !RV32_HAS(JIT)
-            prev = block_find(&rv->block_map, last_pc);
+                prev = block_find(&rv->block_map, last_pc);
 #else
             prev = cache_get(rv->block_cache, last_pc, false);
 #endif
-        }
-        /* lookup the next block in block map or translate a new block,
-         * and move onto the next block.
-         */
-        block_t *block = block_find_or_translate(rv);
-        /* by now, a block should be available */
-        assert(block);
+            }
+            /* lookup the next block in block map or translate a new block,
+             * and move onto the next block.
+             */
+            block_t *block = block_find_or_translate(rv);
+            /* by now, a block should be available */
+            assert(block);
 
 #if RV32_HAS(JIT) && RV32_HAS(SYSTEM)
-        assert(block->satp == rv->csr_satp);
+            assert(block->satp == rv->csr_satp);
 #endif
 
 #if !RV32_HAS(SYSTEM)
-        /* on exit */
-        if (unlikely(block->ir_head->pc == PRIV(rv)->exit_addr))
-            PRIV(rv)->on_exit = true;
+            /* on exit */
+            if (unlikely(block->ir_head->pc == PRIV(rv)->exit_addr))
+                PRIV(rv)->on_exit = true;
 #endif
 
-            /* After emulating the previous block, it is determined whether the
-             * branch is taken or not. The IR array of the current block is then
-             * assigned to either the branch_taken or branch_untaken pointer of
-             * the previous block.
-             */
+                /* After emulating the previous block, it is determined whether
+                 * the branch is taken or not. The IR array of the current block
+                 * is then assigned to either the branch_taken or branch_untaken
+                 * pointer of the previous block.
+                 */
 
 #if RV32_HAS(BLOCK_CHAINING)
-        if (prev
+            if (prev
 #if RV32_HAS(JIT) && RV32_HAS(SYSTEM)
-            && prev->satp == rv->csr_satp
+                && prev->satp == rv->csr_satp
 #endif
-        ) {
-            rv_insn_t *last_ir = prev->ir_tail;
-            /* chain block */
-            if (!insn_is_unconditional_branch(last_ir->opcode)) {
-                if (is_branch_taken && !last_ir->branch_taken) {
-                    last_ir->branch_taken = block->ir_head;
-                } else if (!is_branch_taken && !last_ir->branch_untaken) {
-                    last_ir->branch_untaken = block->ir_head;
-                }
-            } else if (insn_is_direct_branch(last_ir->opcode)) {
-                if (!last_ir->branch_taken) {
-                    last_ir->branch_taken = block->ir_head;
+            ) {
+                rv_insn_t *last_ir = prev->ir_tail;
+                /* chain block */
+                if (!insn_is_unconditional_branch(last_ir->opcode)) {
+                    if (is_branch_taken && !last_ir->branch_taken) {
+                        last_ir->branch_taken = block->ir_head;
+                    } else if (!is_branch_taken && !last_ir->branch_untaken) {
+                        last_ir->branch_untaken = block->ir_head;
+                    }
+                } else if (insn_is_direct_branch(last_ir->opcode)) {
+                    if (!last_ir->branch_taken) {
+                        last_ir->branch_taken = block->ir_head;
+                    }
                 }
             }
-        }
 #endif
-        last_pc = rv->PC;
+            last_pc = rv->PC;
 #if RV32_HAS(JIT)
 #if RV32_HAS(T2C)
-        /* executed through the tier-2 JIT compiler */
-        if (block->hot2) {
-            ((exec_t2c_func_t) block->func)(rv);
-            prev = NULL;
-            continue;
-        } /* check if invoking times of t1 generated code exceed threshold */
-        else if (!block->compiled && block->n_invoke >= THRESHOLD) {
-            block->compiled = true;
-            queue_entry_t *entry = malloc(sizeof(queue_entry_t));
-            entry->block = block;
-            pthread_mutex_lock(&rv->wait_queue_lock);
-            list_add(&entry->list, &rv->wait_queue);
-            pthread_mutex_unlock(&rv->wait_queue_lock);
-        }
+            /* executed through the tier-2 JIT compiler */
+            if (block->hot2) {
+                ((exec_t2c_func_t) block->func)(rv);
+                prev = NULL;
+                continue;
+            } /* check if invoking times of t1 generated code exceed threshold
+               */
+            else if (!block->compiled && block->n_invoke >= THRESHOLD) {
+                block->compiled = true;
+                queue_entry_t *entry = malloc(sizeof(queue_entry_t));
+                entry->block = block;
+                pthread_mutex_lock(&rv->wait_queue_lock);
+                list_add(&entry->list, &rv->wait_queue);
+                pthread_mutex_unlock(&rv->wait_queue_lock);
+            }
 #endif
-        /* executed through the tier-1 JIT compiler */
-        struct jit_state *state = rv->jit_state;
-        /*
-         * TODO: We do not explicitly need the translated block. We only need
-         *       the program counter as a key for searching the corresponding
-         *       entry in compiled binary buffer.
-         */
-        if (block->hot) {
-            block->n_invoke++;
-            ((exec_block_func_t) state->buf)(
-                rv, (uintptr_t) (state->buf + block->offset));
-            prev = NULL;
-            continue;
-        } /* check if the execution path is potential hotspot */
-        if (block->translatable
+            /* executed through the tier-1 JIT compiler */
+            struct jit_state *state = rv->jit_state;
+            /*
+             * TODO: We do not explicitly need the translated block. We only
+             * need the program counter as a key for searching the corresponding
+             *       entry in compiled binary buffer.
+             */
+            if (block->hot) {
+                block->n_invoke++;
+                ((exec_block_func_t) state->buf)(
+                    rv, (uintptr_t) (state->buf + block->offset));
+                prev = NULL;
+                continue;
+            } /* check if the execution path is potential hotspot */
+            if (block->translatable
 #if !RV32_HAS(ARCH_TEST)
-            && runtime_profiler(rv, block)
+                && runtime_profiler(rv, block)
 #endif
-        ) {
-            jit_translate(rv, block);
-            ((exec_block_func_t) state->buf)(
-                rv, (uintptr_t) (state->buf + block->offset));
-            prev = NULL;
-            continue;
-        }
-        set_reset(&pc_set);
-        has_loops = false;
+            ) {
+                jit_translate(rv, block);
+                ((exec_block_func_t) state->buf)(
+                    rv, (uintptr_t) (state->buf + block->offset));
+                prev = NULL;
+                continue;
+            }
+            set_reset(&pc_set);
+            has_loops = false;
 #endif
-        /* execute the block by interpreter */
-        const rv_insn_t *ir = block->ir_head;
-        if (unlikely(!ir->impl(rv, ir, rv->csr_cycle, rv->PC))) {
-            /* block should not be extended if execption handler invoked */
-            prev = NULL;
-            break;
-        }
+            /* execute the block by interpreter */
+            const rv_insn_t *ir = block->ir_head;
+            if (unlikely(!ir->impl(rv, ir, rv->csr_cycle, rv->PC))) {
+                /* block should not be extended if execption handler invoked */
+                prev = NULL;
+                break;
+            }
 #if RV32_HAS(JIT)
-        if (has_loops && !block->has_loops)
-            block->has_loops = true;
+            if (has_loops && !block->has_loops)
+                block->has_loops = true;
 #endif
-        prev = block;
-    }
+            prev = block;
+        }
 
 #ifdef __EMSCRIPTEN__
-    if (rv_has_halted(rv)) {
-        emscripten_cancel_main_loop();
-        rv_delete(rv); /* clean up and reuse memory */
-        rv_log_info("RISC-V emulator is destroyed");
-        enable_run_button();
-    }
+        if (rv_has_halted(rv)) {
+            emscripten_cancel_main_loop();
+            rv_delete(rv); /* clean up and reuse memory */
+            rv_log_info("RISC-V emulator is destroyed");
+            enable_run_button();
+        }
 #endif
-}
+    }
 
-void rv_step_debug(void *arg)
-{
-    assert(arg);
-    riscv_t *rv = arg;
+    void rv_step_debug(void *arg)
+    {
+        assert(arg);
+        riscv_t *rv = arg;
 
 #if RV32_HAS(SYSTEM) && !RV32_HAS(ELF_LOADER)
-    rv_check_interrupt(rv);
+        rv_check_interrupt(rv);
 #endif
 
-    rv_insn_t ir;
+        rv_insn_t ir;
 
-retranslate:
-    memset(&ir, 0, sizeof(rv_insn_t));
+    retranslate:
+        memset(&ir, 0, sizeof(rv_insn_t));
 
-    /* fetch the next instruction */
-    uint32_t insn = rv->io.mem_ifetch(rv, rv->PC);
+        /* fetch the next instruction */
+        uint32_t insn = rv->io.mem_ifetch(rv, rv->PC);
 #if RV32_HAS(SYSTEM)
-    if (!insn && need_retranslate) {
-        need_retranslate = false;
-        goto retranslate;
-    }
+        if (!insn && need_retranslate) {
+            need_retranslate = false;
+            goto retranslate;
+        }
 #endif
-    assert(insn);
+        assert(insn);
 
-    /* decode the instruction */
-    if (!rv_decode(&ir, insn)) {
-        rv->compressed = is_compressed(insn);
-        SET_CAUSE_AND_TVAL_THEN_TRAP(rv, ILLEGAL_INSN, insn);
+        /* decode the instruction */
+        if (!rv_decode(&ir, insn)) {
+            rv->compressed = is_compressed(insn);
+            SET_CAUSE_AND_TVAL_THEN_TRAP(rv, ILLEGAL_INSN, insn);
+            return;
+        }
+
+        ir.impl = dispatch_table[ir.opcode];
+        ir.pc = rv->PC;
+        ir.next = NULL;
+        ir.impl(rv, &ir, rv->csr_cycle, rv->PC);
         return;
     }
 
-    ir.impl = dispatch_table[ir.opcode];
-    ir.pc = rv->PC;
-    ir.next = NULL;
-    ir.impl(rv, &ir, rv->csr_cycle, rv->PC);
-    return;
-}
-
 #if RV32_HAS(SYSTEM)
-static void __trap_handler(riscv_t *rv)
-{
-    rv_insn_t *ir = mpool_calloc(rv->block_ir_mp);
-    assert(ir);
+    static void __trap_handler(riscv_t * rv)
+    {
+        rv_insn_t *ir = mpool_calloc(rv->block_ir_mp);
+        assert(ir);
 
-    /* set to false by sret implementation */
-    while (rv->is_trapped && !rv_has_halted(rv)) {
-        uint32_t insn = rv->io.mem_ifetch(rv, rv->PC);
-        assert(insn);
+        /* set to false by sret implementation */
+        while (rv->is_trapped && !rv_has_halted(rv)) {
+            uint32_t insn = rv->io.mem_ifetch(rv, rv->PC);
+            assert(insn);
 
-        rv_decode(ir, insn);
-        reloc_enable_mmu_jalr_addr = rv->PC;
+            rv_decode(ir, insn);
+            reloc_enable_mmu_jalr_addr = rv->PC;
 
-        ir->impl = dispatch_table[ir->opcode];
-        rv->compressed = is_compressed(insn);
-        ir->impl(rv, ir, rv->csr_cycle, rv->PC);
+            ir->impl = dispatch_table[ir->opcode];
+            rv->compressed = is_compressed(insn);
+            ir->impl(rv, ir, rv->csr_cycle, rv->PC);
+        }
+
+        prev = NULL;
     }
-
-    prev = NULL;
-}
 #endif /* RV32_HAS(SYSTEM) */
 
-/* When a trap occurs in M-mode/S-mode, m/stval is either initialized to zero or
- * populated with exception-specific details to assist software in managing
- * the trap. Otherwise, the implementation never modifies m/stval, although
- * software can explicitly write to it. The hardware platform will define
- * which exceptions are required to informatively set mtval and which may
- * consistently set it to zero.
- *
- * When a hardware breakpoint is triggered or an exception like address
- * misalignment, access fault, or page fault occurs during an instruction
- * fetch, load, or store operation, m/stval is updated with the virtual address
- * that caused the fault. In the case of an illegal instruction trap, m/stval
- * might be updated with the first XLEN or ILEN bits of the offending
- * instruction. For all other traps, m/stval is simply set to zero. However,
- * it is worth noting that a future standard could redefine how m/stval is
- * handled for different types of traps.
- *
- */
-static void _trap_handler(riscv_t *rv)
-{
-    /* m/stvec (Machine/Supervisor Trap-Vector Base Address Register)
-     * m/stvec[MXLEN-1:2]: vector base address
-     * m/stvec[1:0] : vector mode
-     * m/sepc  (Machine/Supervisor Exception Program Counter)
-     * m/stval (Machine/Supervisor Trap Value Register)
-     * m/scause (Machine/Supervisor Cause Register): store exception code
-     * m/sstatus (Machine/Supervisor Status Register): keep track of and
-     * controls the hart’s current operating state
+    /* When a trap occurs in M-mode/S-mode, m/stval is either initialized to
+     * zero or populated with exception-specific details to assist software in
+     * managing the trap. Otherwise, the implementation never modifies m/stval,
+     * although software can explicitly write to it. The hardware platform will
+     * define which exceptions are required to informatively set mtval and which
+     * may consistently set it to zero.
      *
-     * m/stval and m/scause are set in SET_CAUSE_AND_TVAL_THEN_TRAP
+     * When a hardware breakpoint is triggered or an exception like address
+     * misalignment, access fault, or page fault occurs during an instruction
+     * fetch, load, or store operation, m/stval is updated with the virtual
+     * address that caused the fault. In the case of an illegal instruction
+     * trap, m/stval might be updated with the first XLEN or ILEN bits of the
+     * offending instruction. For all other traps, m/stval is simply set to
+     * zero. However, it is worth noting that a future standard could redefine
+     * how m/stval is handled for different types of traps.
+     *
      */
-    uint32_t base;
-    uint32_t mode;
-    uint32_t cause;
-    /* user or supervisor */
-    if (RV_PRIV_IS_U_OR_S_MODE()) {
-        const uint32_t sstatus_sie =
-            (rv->csr_sstatus & SSTATUS_SIE) >> SSTATUS_SIE_SHIFT;
-        rv->csr_sstatus |= (sstatus_sie << SSTATUS_SPIE_SHIFT);
-        rv->csr_sstatus &= ~(SSTATUS_SIE);
-        rv->csr_sstatus |= (rv->priv_mode << SSTATUS_SPP_SHIFT);
-        rv->priv_mode = RV_PRIV_S_MODE;
-        base = rv->csr_stvec & ~0x3;
-        mode = rv->csr_stvec & 0x3;
-        cause = rv->csr_scause;
-        rv->csr_sepc = rv->PC;
+    static void _trap_handler(riscv_t * rv)
+    {
+        /* m/stvec (Machine/Supervisor Trap-Vector Base Address Register)
+         * m/stvec[MXLEN-1:2]: vector base address
+         * m/stvec[1:0] : vector mode
+         * m/sepc  (Machine/Supervisor Exception Program Counter)
+         * m/stval (Machine/Supervisor Trap Value Register)
+         * m/scause (Machine/Supervisor Cause Register): store exception code
+         * m/sstatus (Machine/Supervisor Status Register): keep track of and
+         * controls the hart’s current operating state
+         *
+         * m/stval and m/scause are set in SET_CAUSE_AND_TVAL_THEN_TRAP
+         */
+        uint32_t base;
+        uint32_t mode;
+        uint32_t cause;
+        /* user or supervisor */
+        if (RV_PRIV_IS_U_OR_S_MODE()) {
+            const uint32_t sstatus_sie =
+                (rv->csr_sstatus & SSTATUS_SIE) >> SSTATUS_SIE_SHIFT;
+            rv->csr_sstatus |= (sstatus_sie << SSTATUS_SPIE_SHIFT);
+            rv->csr_sstatus &= ~(SSTATUS_SIE);
+            rv->csr_sstatus |= (rv->priv_mode << SSTATUS_SPP_SHIFT);
+            rv->priv_mode = RV_PRIV_S_MODE;
+            base = rv->csr_stvec & ~0x3;
+            mode = rv->csr_stvec & 0x3;
+            cause = rv->csr_scause;
+            rv->csr_sepc = rv->PC;
 #if RV32_HAS(SYSTEM)
-        rv->last_csr_sepc = rv->csr_sepc;
+            rv->last_csr_sepc = rv->csr_sepc;
 #endif
-    } else { /* machine */
-        const uint32_t mstatus_mie =
-            (rv->csr_mstatus & MSTATUS_MIE) >> MSTATUS_MIE_SHIFT;
-        rv->csr_mstatus |= (mstatus_mie << MSTATUS_MPIE_SHIFT);
-        rv->csr_mstatus &= ~(MSTATUS_MIE);
-        rv->csr_mstatus |= (rv->priv_mode << MSTATUS_MPP_SHIFT);
-        rv->priv_mode = RV_PRIV_M_MODE;
-        base = rv->csr_mtvec & ~0x3;
-        mode = rv->csr_mtvec & 0x3;
-        cause = rv->csr_mcause;
-        rv->csr_mepc = rv->PC;
-        if (!rv->csr_mtvec) { /* in case CSR is not configured */
-            rv_trap_default_handler(rv);
-            return;
+        } else { /* machine */
+            const uint32_t mstatus_mie =
+                (rv->csr_mstatus & MSTATUS_MIE) >> MSTATUS_MIE_SHIFT;
+            rv->csr_mstatus |= (mstatus_mie << MSTATUS_MPIE_SHIFT);
+            rv->csr_mstatus &= ~(MSTATUS_MIE);
+            rv->csr_mstatus |= (rv->priv_mode << MSTATUS_MPP_SHIFT);
+            rv->priv_mode = RV_PRIV_M_MODE;
+            base = rv->csr_mtvec & ~0x3;
+            mode = rv->csr_mtvec & 0x3;
+            cause = rv->csr_mcause;
+            rv->csr_mepc = rv->PC;
+            if (!rv->csr_mtvec) { /* in case CSR is not configured */
+                rv_trap_default_handler(rv);
+                return;
+            }
         }
+        switch (mode) {
+        /* DIRECT: All traps set PC to base */
+        case 0:
+            rv->PC = base;
+            break;
+        /* VECTORED: Asynchronous traps set PC to base + 4 * code */
+        case 1:
+            /* MSB of code is used to indicate whether the trap is interrupt
+             * or exception, so it is not considered as the 'real' code */
+            rv->PC = base + 4 * (cause & MASK(31));
+            break;
+        }
+        IIF(RV32_HAS(SYSTEM))(if (rv->is_trapped) __trap_handler(rv);, )
     }
-    switch (mode) {
-    /* DIRECT: All traps set PC to base */
-    case 0:
-        rv->PC = base;
-        break;
-    /* VECTORED: Asynchronous traps set PC to base + 4 * code */
-    case 1:
-        /* MSB of code is used to indicate whether the trap is interrupt
-         * or exception, so it is not considered as the 'real' code */
-        rv->PC = base + 4 * (cause & MASK(31));
-        break;
+
+    void trap_handler(riscv_t * rv)
+    {
+        assert(rv);
+        _trap_handler(rv);
     }
-    IIF(RV32_HAS(SYSTEM))(if (rv->is_trapped) __trap_handler(rv);, )
-}
 
-void trap_handler(riscv_t *rv)
-{
-    assert(rv);
-    _trap_handler(rv);
-}
+    void ebreak_handler(riscv_t * rv)
+    {
+        assert(rv);
+        SET_CAUSE_AND_TVAL_THEN_TRAP(rv, BREAKPOINT, rv->PC);
+    }
 
-void ebreak_handler(riscv_t *rv)
-{
-    assert(rv);
-    SET_CAUSE_AND_TVAL_THEN_TRAP(rv, BREAKPOINT, rv->PC);
-}
-
-void ecall_handler(riscv_t *rv)
-{
-    assert(rv);
+    void ecall_handler(riscv_t * rv)
+    {
+        assert(rv);
 
 #if RV32_HAS(ELF_LOADER)
-    rv->PC += 4;
-    syscall_handler(rv);
+        rv->PC += 4;
+        syscall_handler(rv);
 #elif RV32_HAS(SYSTEM)
     if (rv->priv_mode == RV_PRIV_U_MODE) {
         switch (rv_get_reg(
@@ -1433,39 +1435,39 @@ void ecall_handler(riscv_t *rv)
     SET_CAUSE_AND_TVAL_THEN_TRAP(rv, ECALL_M, 0);
     syscall_handler(rv);
 #endif
-}
-
-void memset_handler(riscv_t *rv)
-{
-    memory_t *m = PRIV(rv)->mem;
-    memset((char *) m->mem_base + rv->X[rv_reg_a0], rv->X[rv_reg_a1],
-           rv->X[rv_reg_a2]);
-    rv->PC = rv->X[rv_reg_ra] & ~1U;
-}
-
-void memcpy_handler(riscv_t *rv)
-{
-    memory_t *m = PRIV(rv)->mem;
-    memcpy((char *) m->mem_base + rv->X[rv_reg_a0],
-           (char *) m->mem_base + rv->X[rv_reg_a1], rv->X[rv_reg_a2]);
-    rv->PC = rv->X[rv_reg_ra] & ~1U;
-}
-
-void dump_registers(riscv_t *rv, char *out_file_path)
-{
-    FILE *f = out_file_path[0] == '-' ? stdout : fopen(out_file_path, "w");
-    if (!f) {
-        rv_log_error("Cannot open registers output file");
-        return;
     }
 
-    fprintf(f, "{\n");
-    for (unsigned i = 0; i < N_RV_REGS; i++) {
-        char *comma = i < N_RV_REGS - 1 ? "," : "";
-        fprintf(f, "  \"x%d\": %u%s\n", i, rv->X[i], comma);
+    void memset_handler(riscv_t * rv)
+    {
+        memory_t *m = PRIV(rv)->mem;
+        memset((char *) m->mem_base + rv->X[rv_reg_a0], rv->X[rv_reg_a1],
+               rv->X[rv_reg_a2]);
+        rv->PC = rv->X[rv_reg_ra] & ~1U;
     }
-    fprintf(f, "}\n");
 
-    if (out_file_path[0] != '-')
-        fclose(f);
-}
+    void memcpy_handler(riscv_t * rv)
+    {
+        memory_t *m = PRIV(rv)->mem;
+        memcpy((char *) m->mem_base + rv->X[rv_reg_a0],
+               (char *) m->mem_base + rv->X[rv_reg_a1], rv->X[rv_reg_a2]);
+        rv->PC = rv->X[rv_reg_ra] & ~1U;
+    }
+
+    void dump_registers(riscv_t * rv, char *out_file_path)
+    {
+        FILE *f = out_file_path[0] == '-' ? stdout : fopen(out_file_path, "w");
+        if (!f) {
+            rv_log_error("Cannot open registers output file");
+            return;
+        }
+
+        fprintf(f, "{\n");
+        for (unsigned i = 0; i < N_RV_REGS; i++) {
+            char *comma = i < N_RV_REGS - 1 ? "," : "";
+            fprintf(f, "  \"x%d\": %u%s\n", i, rv->X[i], comma);
+        }
+        fprintf(f, "}\n");
+
+        if (out_file_path[0] != '-')
+            fclose(f);
+    }

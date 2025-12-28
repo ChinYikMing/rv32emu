@@ -134,6 +134,8 @@ void vblk_delete(virtio_blk_state_t *vblk);
 
 #define BUF_ALLOC 64 * 4096 /* 64 pages */
 
+#define CHUNK_SIZE 4096
+
 #define VIRTIO_VSOCK_DEV_ID 19
 
 typedef struct {
@@ -160,7 +162,10 @@ typedef struct {
     uint8_t recv_buf[BUF_ALLOC]; /* preallocated recv buffer */
     uint32_t pending_bytes;
     uint32_t peer_free; /* peer available buffer */
-    uint32_t tx_cnt;    /* bytes sent from host to guest/peer (monolithic increasing) */
+    uint32_t
+        tx_cnt; /* bytes sent from host to guest/peer (monolithic increasing) */
+    uint32_t fwd_cnt; /* bytes consumed by host from guest/peer (monolithic
+                         increasing) */
     /* implementation-specific */
     void *priv;
 } virtio_vsock_state_t;
