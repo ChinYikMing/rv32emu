@@ -156,8 +156,8 @@ typedef struct {
     uint64_t cid; /* context ID */
     int port;
     int peer_port;
-    int socket;    /* listening socket */
-    int host_client_fd;
+    int socket;    /* listening socket for host client */
+    int host_client_fd; /* accepted host client fd */
     /* buffer management */
     uint8_t recv_buf[BUF_ALLOC]; /* preallocated recv buffer */
     uint32_t pending_bytes;
