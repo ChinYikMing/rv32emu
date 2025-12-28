@@ -1051,7 +1051,7 @@ static void rv_check_interrupt(riscv_t *rv)
 }
 #endif
 
-struct sockaddr_vm client_sa = {0};
+struct sockaddr_vm guest_sa = {0};
 
 void rv_step(void *arg)
 {
@@ -1093,35 +1093,35 @@ void rv_step(void *arg)
          */
         extern void virtio_vsock_inject(virtio_vsock_state_t * vsock, int op,
                                         void *pkt,
-                                        struct sockaddr_vm *client_sa);
+                                        struct sockaddr_vm *guest_sa);
 	    // FIXME: hardcode 4096
-        if (PRIV(rv)->vsock->peer_free > CHUNK_SIZE) {
+        if (PRIV(rv)->vsock->peer_free > VSOCK_CHUNK_SIZE) {
                 virtio_vsock_inject(PRIV(rv)->vsock, VIRTIO_VSOCK_OP_RW, NULL,
-                                    &client_sa);
+                                    &guest_sa);
 	}
 
             // FIXME: cannot check accept every block emulation => performance
             // drop significantly need to measure, maybe using perf?
             if (rv->csr_cycle % 1000000 == 0) {
-                socklen_t client_len = sizeof(client_sa);
-                int client_fd =
+                socklen_t client_len = sizeof(guest_sa);
+                int bridge_fd =
                     accept(PRIV(rv)->vsock->socket,
-                           (struct sockaddr *) &client_sa, &client_len);
-                if (client_fd == -1 &&
+                           (struct sockaddr *) &guest_sa, &client_len);
+                if (bridge_fd == -1 &&
                     (errno == EAGAIN || errno == EWOULDBLOCK)) {
                     // rv_log_info("EAGAIN || EWOULDBLOCK!");
-                } else if (client_fd == -1) {
+                } else if (bridge_fd == -1) {
                     rv_log_error("accept() failed: %s", strerror(errno));
                     exit(1);
                 } else {
                     // inject connection vsock packet to guest
                     rv_log_info("Connecting!");
-                    // rv_log_info("cid: %u, port: %u", client_sa.svm_cid,
-                    // client_sa.svm_port);
-                    PRIV(rv)->vsock->client_fd = client_fd;
+                    // rv_log_info("cid: %u, port: %u", guest_sa.svm_cid,
+                    // guest_sa.svm_port);
+                    PRIV(rv)->vsock->bridge_fd = bridge_fd;
                     virtio_vsock_inject(PRIV(rv)->vsock,
                                         VIRTIO_VSOCK_OP_REQUEST, NULL,
-                                        &client_sa);
+                                        &guest_sa);
                 }
             }
 #endif

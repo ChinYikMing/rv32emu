@@ -110,7 +110,7 @@ static void virtio_vsock_update_status(virtio_vsock_state_t *vsock,
     uint32_t tx_cnt = vsock->tx_cnt;
     uint32_t fwd_cnt = vsock->fwd_cnt;
     uint64_t socket = vsock->socket;
-    int client_fd = vsock->client_fd;
+    int bridge_fd = vsock->bridge_fd;
     void *priv = vsock->priv;
     memset(vsock, 0, sizeof(*vsock));
     vsock->device_features = device_features;
@@ -123,7 +123,7 @@ static void virtio_vsock_update_status(virtio_vsock_state_t *vsock,
     vsock->tx_cnt = tx_cnt;
     vsock->fwd_cnt = fwd_cnt;
     vsock->socket = socket;
-    vsock->client_fd = client_fd;
+    vsock->bridge_fd = bridge_fd;
     vsock->priv = priv;
 }
 
@@ -171,7 +171,7 @@ static void virtio_queue_response_handler(virtio_vsock_state_t *vsock,
 void virtio_vsock_inject(virtio_vsock_state_t *vsock,
                          int op,
                          void *pkt,
-                         struct sockaddr_vm *client_sa)
+                         struct sockaddr_vm *guest_sa)
 {
     /* Some operations(e.g., VIRTIO_VSOCK_OP_RESPONSE)
      * might fail before notifying the driver via RX,
@@ -190,7 +190,7 @@ void virtio_vsock_inject(virtio_vsock_state_t *vsock,
         rx_pkt->hdr.op = VIRTIO_VSOCK_OP_REQUEST;
         rx_pkt->hdr.type = VIRTIO_VSOCK_TYPE_STREAM;
         rx_pkt->hdr.src_cid = VMADDR_CID_HOST;
-        rx_pkt->hdr.src_port = client_sa->svm_port;
+        rx_pkt->hdr.src_port = guest_sa->svm_port;
         rx_pkt->hdr.dst_cid = vsock->cid;
         rx_pkt->hdr.dst_port = 2222;  // guest listen port, FIXME: dynamic
         rx_pkt->hdr.len = 0;
@@ -199,7 +199,7 @@ void virtio_vsock_inject(virtio_vsock_state_t *vsock,
         rx_pkt->hdr.fwd_cnt = 0; /* connecting, fwd_cnt should be 0 */
 
         vsock->peer_port = 2222;  // guest listen port, FIXME: dynamic
-        vsock->port = client_sa->svm_port;
+        vsock->port = guest_sa->svm_port;
 
         rv_log_trace("OP req from host");
 
@@ -218,7 +218,7 @@ void virtio_vsock_inject(virtio_vsock_state_t *vsock,
         rx_pkt->hdr.op = VIRTIO_VSOCK_OP_RST;
         rx_pkt->hdr.type = VIRTIO_VSOCK_TYPE_STREAM;
         rx_pkt->hdr.src_cid = VMADDR_CID_HOST;
-        rx_pkt->hdr.src_port = client_sa->svm_port;
+        rx_pkt->hdr.src_port = guest_sa->svm_port;
         rx_pkt->hdr.dst_cid = vsock->cid;
         rx_pkt->hdr.dst_port = 2222;  // guest listen port, FIXME: dynamic
         rx_pkt->hdr.len = 0;
@@ -228,8 +228,8 @@ void virtio_vsock_inject(virtio_vsock_state_t *vsock,
 
         virtio_queue_response_handler(vsock, rx_pkt);
 
-        close(vsock->client_fd);
-        vsock->client_fd = -1;
+        close(vsock->bridge_fd);
+        vsock->bridge_fd = -1;
         vsock->peer_free = 0;
         vsock->tx_cnt = 0;
 
@@ -239,7 +239,7 @@ void virtio_vsock_inject(virtio_vsock_state_t *vsock,
         rx_pkt->hdr.op = VIRTIO_VSOCK_OP_SHUTDOWN;
         rx_pkt->hdr.type = VIRTIO_VSOCK_TYPE_STREAM;
         rx_pkt->hdr.src_cid = VMADDR_CID_HOST;
-        rx_pkt->hdr.src_port = client_sa->svm_port;
+        rx_pkt->hdr.src_port = guest_sa->svm_port;
         rx_pkt->hdr.dst_cid = vsock->cid;
         rx_pkt->hdr.dst_port = 2222;  // guest listen port, FIXME: dynamic
         rx_pkt->hdr.len = 0;
@@ -252,17 +252,16 @@ void virtio_vsock_inject(virtio_vsock_state_t *vsock,
         break;
     case VIRTIO_VSOCK_OP_RW:
         /* hostOS to guestOS */
-
-        // ssize_t recv_cnt = recv(vsock->client_fd, vsock->recv_buf,
+        // ssize_t recv_cnt = recv(vsock->bridge_fd, vsock->recv_buf,
         //                        ARRAY_SIZE(vsock->recv_buf), MSG_DONTWAIT);
         ssize_t recv_cnt =
-            recv(vsock->client_fd, vsock->recv_buf, CHUNK_SIZE, MSG_DONTWAIT | MSG_WAITALL);
+            recv(vsock->bridge_fd, vsock->recv_buf, VSOCK_CHUNK_SIZE, MSG_DONTWAIT | MSG_WAITALL);
         if (recv_cnt == -1) {
             if (errno != EAGAIN && errno != EWOULDBLOCK) {
                 switch (errno) {
                 case ENOTCONN:
                     virtio_vsock_inject(vsock, VIRTIO_VSOCK_OP_RST, NULL,
-                                        client_sa);
+                                        guest_sa);
                     break;
                 default:
                     break;
@@ -312,7 +311,7 @@ void virtio_vsock_inject(virtio_vsock_state_t *vsock,
         rx_pkt->hdr.op = VIRTIO_VSOCK_OP_CREDIT_UPDATE;
         rx_pkt->hdr.type = VIRTIO_VSOCK_TYPE_STREAM;
         rx_pkt->hdr.src_cid = VMADDR_CID_HOST;
-        rx_pkt->hdr.src_port = client_sa->svm_port;
+        rx_pkt->hdr.src_port = guest_sa->svm_port;
         rx_pkt->hdr.dst_cid = vsock->cid;
         rx_pkt->hdr.dst_port = 2222;  // guest listen port, FIXME: dynamic
         rx_pkt->hdr.len = 0;
@@ -328,7 +327,7 @@ void virtio_vsock_inject(virtio_vsock_state_t *vsock,
         rx_pkt->hdr.op = VIRTIO_VSOCK_OP_CREDIT_REQUEST;
         rx_pkt->hdr.type = VIRTIO_VSOCK_TYPE_STREAM;
         rx_pkt->hdr.src_cid = VMADDR_CID_HOST;
-        rx_pkt->hdr.src_port = client_sa->svm_port;
+        rx_pkt->hdr.src_port = guest_sa->svm_port;
         rx_pkt->hdr.dst_cid = vsock->cid;
         rx_pkt->hdr.dst_port = 2222;  // guest listen port, FIXME: dynamic
         rx_pkt->hdr.len = 0;
@@ -369,8 +368,8 @@ static void virtio_queue_notify_handler(virtio_vsock_state_t *vsock, int index)
 
     struct virtio_vsock_packet *vsock_pkt = VSOCK_PKT(vsock, vq_desc);
 
-    struct sockaddr_vm client_sa = {0};
-    socklen_t client_len = sizeof(client_sa);
+    struct sockaddr_vm guest_sa = {0};
+    socklen_t client_len = sizeof(guest_sa);
 
     /* TODO: support SEQPACKET */
     if (vsock_pkt->hdr.type == VIRTIO_VSOCK_TYPE_SEQPACKET) {
@@ -414,22 +413,22 @@ static void virtio_queue_notify_handler(virtio_vsock_state_t *vsock, int index)
                 rv_log_error("socket() failed: %s", strerror(errno));
                 return;
             }
-            vsock->client_fd = sock;
+            vsock->bridge_fd = sock;
 
-            if (getsockname(vsock->client_fd, (struct sockaddr *) &client_sa,
+            if (getsockname(vsock->bridge_fd, (struct sockaddr *) &guest_sa,
                             &client_len) == -1) {
                 rv_log_error("getsockname() failed: %s", strerror(errno));
                 return;
             }
 
-            if (connect(vsock->client_fd, (struct sockaddr *) &svm,
+            if (connect(vsock->bridge_fd, (struct sockaddr *) &svm,
                         sizeof(svm)) < 0) {
                 rv_log_error("connect() failed: %s", strerror(errno));
 
                 /* Send VIRTIO_VSOCK_OP_RST if connecting fails  */
                 resp.hdr.op = VIRTIO_VSOCK_OP_RST;
                 virtio_vsock_inject(vsock, VIRTIO_VSOCK_OP_RESPONSE, &resp,
-                                    &client_sa);
+                                    &guest_sa);
                 return;
             }
 
@@ -442,7 +441,7 @@ static void virtio_queue_notify_handler(virtio_vsock_state_t *vsock, int index)
 
             /* Send VIRTIO_VSOCK_OP_RESPONSE if connecting OK */
             virtio_vsock_inject(vsock, VIRTIO_VSOCK_OP_RESPONSE, &resp,
-                                &client_sa);
+                                &guest_sa);
             break;
         case VIRTIO_VSOCK_OP_RESPONSE:
             /* store the peer's allocated buffer once connected is establised */
@@ -461,8 +460,8 @@ static void virtio_queue_notify_handler(virtio_vsock_state_t *vsock, int index)
              */
             rv_log_trace("Resetting...");
 
-            close(vsock->client_fd);
-            vsock->client_fd = -1;
+            close(vsock->bridge_fd);
+            vsock->bridge_fd = -1;
             vsock->peer_free = 0;
             vsock->tx_cnt = 0;
             break;
@@ -473,7 +472,7 @@ static void virtio_queue_notify_handler(virtio_vsock_state_t *vsock, int index)
                 VIRTIO_VSOCK_SHUTDOWN_F_SEND) {
                 shutdown_how |= SHUT_WR;
             }
-            if (shutdown(vsock->client_fd, shutdown_how) < 0) {
+            if (shutdown(vsock->bridge_fd, shutdown_how) < 0) {
                 rv_log_error("shutdown() failed: %s", strerror(errno));
                 return;
             }
@@ -485,7 +484,7 @@ static void virtio_queue_notify_handler(virtio_vsock_state_t *vsock, int index)
                               ->ram[queue->queue_desc + vq_desc->next * 4];
 
                 if ((ret =
-                         send(vsock->client_fd,
+                         send(vsock->bridge_fd,
                               (void *) ((uintptr_t) vsock->ram + vq_desc->addr),
                               vq_desc->len, MSG_NOSIGNAL) < 0)) {
                     /* peer might close connection early */
@@ -524,14 +523,14 @@ static void virtio_queue_notify_handler(virtio_vsock_state_t *vsock, int index)
             break;
         case VIRTIO_VSOCK_OP_CREDIT_REQUEST:
             /* Send VIRTIO_VSOCK_OP_CREDIT_UPDATE to peer */
-            if (getsockname(vsock->client_fd, (struct sockaddr *) &client_sa,
+            if (getsockname(vsock->bridge_fd, (struct sockaddr *) &guest_sa,
                             &client_len) == -1) {
                 rv_log_error("getsockname() failed: %s", strerror(errno));
                 return;
             }
 
             virtio_vsock_inject(vsock, VIRTIO_VSOCK_OP_CREDIT_UPDATE, NULL,
-                                &client_sa);
+                                &guest_sa);
             rv_log_trace("notify creadit_request...");
             break;
         default:

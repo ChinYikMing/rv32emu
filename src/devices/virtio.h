@@ -134,7 +134,7 @@ void vblk_delete(virtio_blk_state_t *vblk);
 
 #define BUF_ALLOC 64 * 4096 /* 64 pages */
 
-#define CHUNK_SIZE 4096
+#define VSOCK_CHUNK_SIZE 4096
 
 #define VIRTIO_VSOCK_DEV_ID 19
 
@@ -157,7 +157,7 @@ typedef struct {
     int port;
     int peer_port;
     int socket;    /* listening socket */
-    int client_fd; /* FIXME: use better naming */
+    int bridge_fd;
     /* buffer management */
     uint8_t recv_buf[BUF_ALLOC]; /* preallocated recv buffer */
     uint32_t pending_bytes;
@@ -203,10 +203,13 @@ typedef struct {
 
 void virtio_vsock_recv(virtio_vsock_state_t *vsock);
 
+/*
+ * Inject event from host's device to guest's driver
+ */
 void virtio_vsock_inject(virtio_vsock_state_t *vsock,
                          int op,
                          void *pkt,
-                         struct sockaddr_vm *client_sa);
+                         struct sockaddr_vm *guest_sa);
 
 uint32_t virtio_vsock_read(virtio_vsock_state_t *vsock, uint32_t addr);
 
