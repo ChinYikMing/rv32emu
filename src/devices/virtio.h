@@ -157,7 +157,7 @@ typedef struct {
     int port;
     int peer_port;
     int socket;    /* listening socket */
-    int bridge_fd;
+    int host_client_fd;
     /* buffer management */
     uint8_t recv_buf[BUF_ALLOC]; /* preallocated recv buffer */
     uint32_t pending_bytes;

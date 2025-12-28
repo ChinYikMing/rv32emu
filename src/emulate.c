@@ -1104,13 +1104,13 @@ void rv_step(void *arg)
             // drop significantly need to measure, maybe using perf?
             if (rv->csr_cycle % 1000000 == 0) {
                 socklen_t client_len = sizeof(guest_sa);
-                int bridge_fd =
+                int host_client_fd =
                     accept(PRIV(rv)->vsock->socket,
                            (struct sockaddr *) &guest_sa, &client_len);
-                if (bridge_fd == -1 &&
+                if (host_client_fd == -1 &&
                     (errno == EAGAIN || errno == EWOULDBLOCK)) {
                     // rv_log_info("EAGAIN || EWOULDBLOCK!");
-                } else if (bridge_fd == -1) {
+                } else if (host_client_fd == -1) {
                     rv_log_error("accept() failed: %s", strerror(errno));
                     exit(1);
                 } else {
@@ -1118,7 +1118,7 @@ void rv_step(void *arg)
                     rv_log_info("Connecting!");
                     // rv_log_info("cid: %u, port: %u", guest_sa.svm_cid,
                     // guest_sa.svm_port);
-                    PRIV(rv)->vsock->bridge_fd = bridge_fd;
+                    PRIV(rv)->vsock->host_client_fd = host_client_fd;
                     virtio_vsock_inject(PRIV(rv)->vsock,
                                         VIRTIO_VSOCK_OP_REQUEST, NULL,
                                         &guest_sa);

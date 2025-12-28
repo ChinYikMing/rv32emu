@@ -661,7 +661,7 @@ riscv_t *rv_create(riscv_user_t rv_attr)
         //     exit(EXIT_FAILURE);
         //}
 
-        attr->vsock->bridge_fd = -1;
+        attr->vsock->host_client_fd = -1;
         attr->vsock->tx_cnt = 0;
         attr->vsock->ram = (uint32_t *) attr->mem->mem_base;
         virtio_vsock_init(attr->vsock, cid);
