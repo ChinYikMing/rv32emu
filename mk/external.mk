@@ -73,6 +73,10 @@ define verify
                 | cut -f 1 -d ' ' > $(SHA_FILE2) && cmp $(SHA_FILE1) $(SHA_FILE2))), \
             ($(eval VERIFIER := (ls $(3) >/dev/null 2>&1 || echo FAILED) && echo "$(strip $(2))  $(strip $(3))" | $(1) -c -)) \
     ))
+    $(info "*******************************")
+    $(info $(shell cat $(SHA_FILE1))))
+    $(info $(shell cat $(SHA_FILE2))))
+    $(info "*******************************")
     $(eval _ := $(shell $(VERIFIER) 2>&1))
     $(eval _ := \
         $(if $(filter FAILED differ:,$(_)), \
