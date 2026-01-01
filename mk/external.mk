@@ -76,6 +76,8 @@ define verify
     $(info "*******************************")
     $(info $(shell cat $(SHA_FILE1))))
     $(info $(shell cat $(SHA_FILE2))))
+    $(eval $(info $(shell cat $(SHA_FILE1)))))
+    $(eval $(info $(shell cat $(SHA_FILE2)))))
     $(info "*******************************")
     $(eval _ := $(shell $(VERIFIER) 2>&1))
     $(eval _ := \
