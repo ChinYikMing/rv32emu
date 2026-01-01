@@ -9,15 +9,16 @@ VERIFIER :=
 SHA_FILE1 := $(shell mktemp)
 SHA_FILE2 := $(shell mktemp)
 
-# $(1): compressed source
+# $(1): source
 define prologue
     $(eval _ := $(shell echo "  GET\t$(1)\n"))
     $(info $(_))
 endef
 
-# $(1), $(2), $(3): files to be deleted
+# $(1): source
 define epilogue
-    $(RM) $(1) $(2) $(3)
+    $(eval _ := $(shell echo "  GET\t$(1)\tDone\n"))
+    $(info $(_))
 endef
 
 # $(1): compressed source URL
@@ -150,6 +151,7 @@ $($(T)_DATA):
 	$(Q)$$(call download,$(strip $($(T)_DATA_URL)))
 	$(Q)$$(call extract,$($(T)_DATA_DEST),$(notdir $($(T)_DATA_URL)),$($(T)_DATA_SKIP_DIR_LEVEL))
 	$(Q)$$(call verify,$($(T)_DATA_SHA_CMD),$($(T)_DATA_SHA),$($(T)_DATA))
+	$(Q)$$(call epilogue,$$@)
 endef
 
 EXTERNAL_DATA = DOOM QUAKE TIMIDITY BUILDROOT LINUX SIMPLEFS
