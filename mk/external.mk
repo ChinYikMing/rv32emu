@@ -124,7 +124,7 @@ BUILDROOT_DATA_SHA = 5e163c08e2bacfd6455afe41d6f71ea642217b2b
 BUILDROOT_DATA_SHA_CMD = $(SHA1SUM)
 $(info "================")
 $(info $(BUILDROOT_DATA_SHA_CMD))
-$(shell $(BUILDROOT_DATA_SHA_CMD) --version)
+$(shell $(SHA1SUM) --version)
 $(info "================")
 
 # Linux kernel
