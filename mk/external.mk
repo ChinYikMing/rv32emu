@@ -119,8 +119,12 @@ TIMIDITY_DATA_SHA_CMD = $(SHA1SUM)
 BUILDROOT_VERSION = 2025.11
 BUILDROOT_DATA = /tmp/buildroot
 BUILDROOT_DATA_URL = git clone https://github.com/buildroot/buildroot $(BUILDROOT_DATA) -b $(BUILDROOT_VERSION) --depth=1
+# calculated by: find /tmp/buildroot -type f -not -path '*/.git/*' -print0 | sort -z | xargs -0 sha1sum | sort | sha1sum
 BUILDROOT_DATA_SHA = 5e163c08e2bacfd6455afe41d6f71ea642217b2b
 BUILDROOT_DATA_SHA_CMD = $(SHA1SUM)
+$(info "================")
+$(info $(BUILDROOT_DATA_SHA_CMD))
+$(info "================")
 
 # Linux kernel
 LINUX_VERSION = 6
@@ -142,6 +146,7 @@ LINUX_DATA_SHA_CMD = $(SHA256SUM)
 SIMPLEFS_VERSION = rel2025.0
 SIMPLEFS_DATA = /tmp/simplefs
 SIMPLEFS_DATA_URL = git clone https://github.com/sysprog21/simplefs $(SIMPLEFS_DATA) -b $(SIMPLEFS_VERSION) --depth=1
+# calculated by: find /tmp/simplefs -type f -not -path '*/.git/*' -print0 | sort -z | xargs -0 sha1sum | sort | sha1sum
 SIMPLEFS_DATA_SHA = 863936f72e0781b240c5ec4574510c57f0394b99
 SIMPLEFS_DATA_SHA_CMD = $(SHA1SUM)
 
