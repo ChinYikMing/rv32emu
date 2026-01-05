@@ -101,6 +101,7 @@ int main()
     /* Step 8. Disable the alarm interrupt */
     if (ioctl(fd, RTC_AIE_OFF, 0) == -1) {
         perror("RTC_AIE_OFF ioctl failed");
+
         close(fd);
         return 1;
     }
