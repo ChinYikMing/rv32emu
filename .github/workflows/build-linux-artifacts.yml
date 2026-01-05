@@ -40,6 +40,12 @@ jobs:
                         -e "+BUILDROOT_VERSION" \
                         -e "+LINUX_VERSION" \
                         -e "+LINUX_PATCHLEVEL" \
+                     )
+            echo -n $(git --no-pager diff HEAD^ HEAD | grep \
+                        -e "tests/system/br_pkgs/rtc/" \
+                        -e "+BUILDROOT_VERSION" \
+                        -e "+LINUX_VERSION" \
+                        -e "+LINUX_PATCHLEVEL" \
                      ) >> linux-image-version-change
             if [[ -s linux-image-version-change ]]; then
                 echo "has_changed_linux_image_version=true" >> $GITHUB_OUTPUT
