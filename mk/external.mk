@@ -217,6 +217,9 @@ $(LINUX_DATA_DEST)/linux-$(LINUX_VERSION).$(LINUX_PATCHLEVEL).%.tar.gz:
 
 
 
+
+
+
 ifeq ($(CONFIG_SDL),y)
 doom: artifact $(DOOM_DATA) $(BIN)
 	(cd $(OUT); LC_ALL=C ../$(BIN) riscv32/doom)
