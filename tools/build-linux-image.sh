@@ -129,7 +129,7 @@ function do_patch_doom
 {
     # Need to sed -i --specs=nano.spec to avoid nanolibc and -Bstatic to avoid static linking
     sed -i 's/--specs=nano\.specs//g' ${BR_DOOM_PKG_DIR}/src/riscv/Makefile
-    sed -i 's/-Bstatic//g' ${BR_DOOM_PKG_DIR}/src/riscv/Makefile
+    sed -i 's/-Bstatic,//g' ${BR_DOOM_PKG_DIR}/src/riscv/Makefile
     # rename output binary from doom-riscv.elf to doom
     sed -i 's/doom-riscv\.elf/doom/g' ${BR_DOOM_PKG_DIR}/src/riscv/Makefile
 
