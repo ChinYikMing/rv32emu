@@ -170,7 +170,7 @@ function do_patch_quake
     fi
 
     create_br_pkg_config ${pkg_name} ${SRC_DIR}/buildroot/package/${pkg_name}/Config.in
-    create_br_pkg_makefile ${pkg_name} ${SRC_DIR}/buildroot/package/${pkg_name}/${pkg_name}.mk "port/boards/rv32emu" "" "id1/"
+    create_br_pkg_makefile ${pkg_name} ${SRC_DIR}/buildroot/package/${pkg_name}/${pkg_name}.mk "port/boards/rv32emu" "port/boards/rv32emu" "id1/"
     # cmake to generate Makefile
     cd ${BR_QUAKE_PKG_DIR}
     cmake -DCMAKE_TOOLCHAIN_FILE=./port/boards/rv32emu/toolchain.cmake \
