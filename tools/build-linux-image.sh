@@ -73,7 +73,15 @@ endef
 
 define ${pkg_name^^}_INSTALL_TARGET_CMDS
 	\$(INSTALL) -D -m 0755 \$(@D)/${output_bin_prefix}/${pkg_name} \$(TARGET_DIR)/usr/bin
+EOF
+
+    if [ -n "${artifact}" ]; then
+        cat << EOF >> "${output_path}"
 	cp -a \$(@D)/${artifact} \$(TARGET_DIR)/root
+EOF
+    fi
+
+    cat << EOF >> "${output_path}"
 endef
 
 \$(eval \$(generic-package))
@@ -136,7 +144,7 @@ function do_patch_doom
             --referer="https://www.doomworld.com/" \
             --show-progress \
             --continue \
-            http://www.doomworld.com/3ddownloads/ports/shareware_doom_iwad.zip
+            https://www.doomworld.com/3ddownloads/ports/shareware_doom_iwad.zip
         unzip -d ${SRC_DIR}/buildroot/package/${pkg_name}/src shareware_doom_iwad.zip
     fi
 
