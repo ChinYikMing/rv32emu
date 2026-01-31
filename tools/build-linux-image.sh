@@ -171,15 +171,17 @@ function do_patch_quake
 
     create_br_pkg_config ${pkg_name} ${SRC_DIR}/buildroot/package/${pkg_name}/Config.in
     create_br_pkg_makefile ${pkg_name} ${SRC_DIR}/buildroot/package/${pkg_name}/${pkg_name}.mk "port/boards/rv32emu" "port/boards/rv32emu" "id1/"
+
+    # cp Quake submodule's src to buildroot Quake package src
+    mkdir -p ${SRC_DIR}/buildroot/package/${pkg_name}/src
+    cp -rf ${BR_QUAKE_PKG_DIR}/* ${SRC_DIR}/buildroot/package/${pkg_name}/src
+
     # cmake to generate Makefile
-    cd ${BR_QUAKE_PKG_DIR}
+    cd ${SRC_DIR}/buildroot/package/${pkg_name}/src
     cmake -DCMAKE_TOOLCHAIN_FILE=./port/boards/rv32emu/toolchain.cmake \
         -DCROSS_COMPILE=riscv32-buildroot-linux-gnu- \
         -DCMAKE_BUILD_TYPE=RELEASE -DBOARD_NAME=rv32emu .
     cd -
-    # cp Quake submodule's src to buildroot Quake package src
-    mkdir -p ${SRC_DIR}/buildroot/package/${pkg_name}/src
-    cp -rf ${BR_QUAKE_PKG_DIR}/* ${SRC_DIR}/buildroot/package/${pkg_name}/src
 
     update_br_pkg_config ${pkg_name}
 }
