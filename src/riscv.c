@@ -1286,7 +1286,7 @@ bool rv_cold_reboot(riscv_t *rv, riscv_word_t pc)
     capture_keyboard_input();
 #endif /* !RV32_HAS(SYSTEM_MMIO) */
 
-    /* create block and IRs memory pool */
+    /* create block, IRs, fuse_IRs memory pool */
     if (!rv->block_mp) { /* check for reboot */
         rv->block_mp = mpool_create(sizeof(block_t) << BLOCK_MAP_CAPACITY_BITS,
                                     sizeof(block_t));
@@ -1294,6 +1294,10 @@ bool rv_cold_reboot(riscv_t *rv, riscv_word_t pc)
     if (!rv->block_ir_mp) { /* check for reboot */
         rv->block_ir_mp = mpool_create(
             sizeof(rv_insn_t) << BLOCK_IR_MAP_CAPACITY_BITS, sizeof(rv_insn_t));
+    }
+    if (!rv->fuse_mp) { /* check for reboot */
+	rv->fuse_mp = mpool_create(FUSE_SLOT_SIZE << BLOCK_IR_MAP_CAPACITY_BITS,
+                                   FUSE_SLOT_SIZE);
     }
 
 #if !RV32_HAS(JIT)
@@ -1339,6 +1343,7 @@ bool rv_cold_reboot(riscv_t *rv, riscv_word_t pc)
     /* prepare wait queue. */
     pthread_mutex_init(&rv->wait_queue_lock, NULL);
     pthread_mutex_init(&rv->cache_lock, NULL);
+    pthread_cond_init(&rv->wait_queue_cond, NULL);
     INIT_LIST_HEAD(&rv->wait_queue);
     /* activate the background compilation thread. */
     pthread_create(&t2c_thread, NULL, t2c_runloop, rv);
