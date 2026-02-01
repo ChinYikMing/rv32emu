@@ -158,7 +158,7 @@ function do_patch_doom
         print_success "Downloading Doom shareware IWAD..."
         if [ -n "${GH_TOKEN:-}" ]; then
             download_with_headers \
-                "https://www.doomworld.com/3ddownloads/ports/shareware_doom_iwad.zip" \
+                "https://github.com/sysprog21/rv32emu-prebuilt/releases/download/2025.10.25-Linux-Image/shareware_doom_iwad.zip" \
                 "Authorization: Bearer ${GH_TOKEN}" \
                 > shareware_doom_iwad.zip
         else
