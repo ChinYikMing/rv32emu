@@ -60,12 +60,8 @@ HOST_UTC_YEAR=$(LC_ALL=C date -u +%Y)
 ENABLE_VBLK=1
 VBLK_IMGS=(
     build/disk_ext4.img
+    build/disk_simplefs.img
 )
-# FIXME: mkfs.simplefs is not compilable on macOS, thus running the
-# simplefs cases on Linux runner for now
-if [[ "${OS_TYPE}" == "Linux" ]]; then
-    VBLK_IMGS+=(build/disk_simplefs.img)
-fi
 SIMPLEFS_KO_SRC="${VBLK_IMGS[0]}"
 
 # If any disk image is not found in the VBLK_IMGS, skip the VBLK tests
