@@ -264,6 +264,7 @@ function do_buildroot
     ASSERT make ${PARALLEL}
     popd
     cp -f ${SRC_DIR}/buildroot/output/images/rootfs.cpio ${OUTPUT_DIR}
+    cp -f ${SRC_DIR}/buildroot/output/images/rootfs.cpio.gz ${OUTPUT_DIR}
 }
 
 function do_linux
@@ -277,6 +278,7 @@ function do_linux
     ASSERT make ${PARALLEL}
     popd
     cp -f ${SRC_DIR}/linux/arch/riscv/boot/Image ${OUTPUT_DIR}
+    cp -f ${SRC_DIR}/linux/arch/riscv/boot/Image.gz ${OUTPUT_DIR}
 }
 
 function do_simplefs
