@@ -428,6 +428,10 @@ config DEBUG_SYMBOLS
       Generate debug information for gdb/lldb.
       Increases binary size significantly.
 
+config LINK_ZLIB
+    def_bool $(python,assert run(sys.executable, 'tools/detect-env.py', '--have-zlib'))
+    depends on SYSTEM && !ELF_LOADER && !CC_IS_EMCC
+
 endmenu
 
 # Configuration marker

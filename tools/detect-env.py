@@ -19,6 +19,7 @@ Options:
     --have-sdl2-mixer   Check if SDL2_mixer is available (exit 0/1)
     --have-llvm18       Check if LLVM 18 is available (exit 0/1)
     --have-riscv-toolchain  Check if RISC-V toolchain exists (exit 0/1)
+    --have-zlib         Check if zlib exists (exit 0/1)
     --summary           Print full environment summary
 """
 
@@ -172,6 +173,14 @@ def have_riscv_toolchain():
     return False
 
 
+def have_zlib():
+    """Check if ZLIB is available."""
+    ret, _, _ = run_cmd(
+        [sys.executable, "-c", "import zlib; print(zlib.ZLIB_VERSION)"]
+    )
+    return ret == 0 and _compiler_type() != "Emscripten"
+
+
 def print_summary():
     """Print full environment summary."""
     compiler = get_compiler_path()
@@ -185,6 +194,7 @@ def print_summary():
     print(f"SDL2_mixer: {'yes' if have_sdl2_mixer() else 'no'}")
     print(f"LLVM 18: {'yes' if have_llvm18() else 'no'}")
     print(f"RISC-V Toolchain: {'yes' if have_riscv_toolchain() else 'no'}")
+    print(f"ZLIB: {'yes' if have_zlib() else 'no'}")
 
 
 def bool_exit(result):
@@ -231,6 +241,8 @@ def main():
         bool_exit(have_llvm18())
     elif arg == "--have-riscv-toolchain":
         bool_exit(have_riscv_toolchain())
+    elif arg == "--have-zlib":
+        bool_exit(have_zlib())
     elif arg == "--summary":
         print_summary()
     else:

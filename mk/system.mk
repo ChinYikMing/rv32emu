@@ -125,4 +125,9 @@ CFLAGS := $(filter-out -DMEM_SIZE=%,$(CFLAGS))
 CFLAGS += -DMEM_SIZE=0x20000000ULL
 endif
 
+# Dynamic link zlib
+ifeq ($(CONFIG_LINK_ZLIB),y)
+    LDFLAGS += -lz
+endif
+
 endif # _MK_SYSTEM_INCLUDED
