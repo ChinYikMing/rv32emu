@@ -54,9 +54,6 @@ check_image_for_file()
 
 cleanup
 
-# To test RTC clock
-HOST_UTC_YEAR=$(LC_ALL=C date -u +%Y)
-
 ENABLE_VBLK=1
 VBLK_IMGS=(
     build/disk_ext4.img
