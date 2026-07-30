@@ -155,7 +155,7 @@ LINUX_DATA_SKIP_DIR_LEVEL := 1
 LINUX_DATA_SHA_CMD := $(SHA256SUM)
 
 # simplefs kernel module
-SIMPLEFS_VERSION := rel2025.0
+SIMPLEFS_VERSION := rel2026.0
 SIMPLEFS_DATA_DEST := /tmp
 SIMPLEFS_DATA := $(SIMPLEFS_DATA_DEST)/simplefs
 SIMPLEFS_DATA_URL := git clone https://github.com/sysprog21/simplefs $(SIMPLEFS_DATA) -b $(SIMPLEFS_VERSION) --depth=1
@@ -164,7 +164,7 @@ SIMPLEFS_DATA_URL := git clone https://github.com/sysprog21/simplefs $(SIMPLEFS_
 #	xargs -0 sha1sum | \
 #	LC_ALL=C sort | \
 #	sha1sum
-SIMPLEFS_DATA_SHA := 863936f72e0781b240c5ec4574510c57f0394b99
+SIMPLEFS_DATA_SHA := f04a3044bc64195ae59cea064c4bf330132de269
 SIMPLEFS_DATA_SHA_CMD := $(SHA1SUM)
 
 # Download Rules Template

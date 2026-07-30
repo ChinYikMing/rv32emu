@@ -8,12 +8,8 @@ check_platform
 
 VBLK_IMGS=(
     build/disk_ext4.img
+    build/disk_simplefs.img
 )
-# FIXME: mkfs.simplefs is not compilable on macOS, thus running the
-# simplefs cases on Linux runner for now
-if [[ "${OS_TYPE}" == "Linux" ]]; then
-    VBLK_IMGS+=(build/disk_simplefs.img)
-fi
 
 which dd > /dev/null 2>&1 || {
     echo "Error: dd not found"
@@ -34,7 +30,7 @@ ACTION=$1
 case "$ACTION" in
     setup)
         # Clone simplefs to use mkfs.simplefs util and create simplefs disk image
-        git clone https://github.com/sysprog21/simplefs.git -b rel2025.0 --depth 1
+        git clone https://github.com/sysprog21/simplefs.git -b rel2026.0 --depth 1
 
         # Setup disk images
         for disk_img in "${VBLK_IMGS[@]}"; do
@@ -54,17 +50,23 @@ case "$ACTION" in
                     ;;
                 Darwin)
                     # Setup a /dev/ block device with ext4 fs to test guestOS access to hostOS /dev/ block device
-                    dd if=/dev/zero of=${disk_img} bs=4M count=32
-                    $(brew --prefix e2fsprogs)/sbin/mkfs.ext4 ${disk_img}
-                    # Write simplefs.ko BEFORE hdiutil attach (hdiutil locks the image file)
-                    DEBUGFS_CMD="$(brew --prefix e2fsprogs)/sbin/debugfs"
-                    if [ ! -x "${DEBUGFS_CMD}" ]; then
-                        echo "Error: debugfs not found at ${DEBUGFS_CMD}"
-                        exit 1
+                    if [[ "${disk_img}" =~ ext4 ]]; then
+                        dd if=/dev/zero of=${disk_img} bs=4M count=32
+                        $(brew --prefix e2fsprogs)/sbin/mkfs.ext4 ${disk_img}
+                        # Write simplefs.ko BEFORE hdiutil attach (hdiutil locks the image file)
+                        DEBUGFS_CMD="$(brew --prefix e2fsprogs)/sbin/debugfs"
+                        if [ ! -x "${DEBUGFS_CMD}" ]; then
+                            echo "Error: debugfs not found at ${DEBUGFS_CMD}"
+                            exit 1
+                        fi
+                        "${DEBUGFS_CMD}" -w -R \
+                            "write build/linux-image/simplefs.ko simplefs.ko" "${disk_img}" \
+                            || exit 1
+                    else
+                        mkdir -p simplefs/build
+                        make IMAGE=${disk_img} ${disk_img} -C simplefs
+                        mv simplefs/${disk_img} ./build
                     fi
-                    "${DEBUGFS_CMD}" -w -R \
-                        "write build/linux-image/simplefs.ko simplefs.ko" "${disk_img}" \
-                        || exit 1
                     BLK_DEV=$(hdiutil attach -nomount ${disk_img})
                     ;;
             esac
@@ -108,6 +110,7 @@ case "$ACTION" in
                 ;;
             Darwin)
                 hdiutil detach ${BLK_DEV_EXT4}
+                hdiutil detach ${BLK_DEV_SIMPLEFS}
                 ;;
         esac
 
