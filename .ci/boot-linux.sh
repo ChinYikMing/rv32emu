@@ -80,10 +80,15 @@ cleanup
 
 # RTC tests in a subshell ()
 (. "${SCRIPT_DIR}/rtc.sh")
-RET=$?
+RTC_RET=$?
+
+# Gzipped images tests in a subshell ()
+(. "${SCRIPT_DIR}/boot-gzip-linux.sh")
+BOOT_GZIP_LINUX_RET=$?
 
 OPTS_BASE=" -k build/linux-image/Image -i build/linux-image/rootfs.cpio"
 
+RET=$((${RTC_RET} + ${BOOT_GZIP_LINUX_RET}))
 for disk_img in "${VBLK_IMGS[@]}"; do
     MESSAGES=("${COLOR_G}OK!"
         "${COLOR_R}Fail to boot"
