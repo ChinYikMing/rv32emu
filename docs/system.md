@@ -118,3 +118,14 @@ Linux host environment. It can be found at `tools/build-linux-image.sh`.
 ```shell
 $ make build-linux-image
 ```
+
+## Boot with gzipped Linux image
+The emulator automatically detects if the kernel and rootfs images are gzipped.
+Free combination of gzipped/ungzipped images is supported:
+- Both kernel and rootfs.cpio are gzipped
+- Kernel is gzipped, but rootfs.cpio is ungzipped
+- Kernel is ungzipped, but rootfs.cpio is gzipped
+
+```shell
+$ build/rv32emu -k <gzipped_kernel_img_path> -i <gzipped_rootfs_img_path>
+```
