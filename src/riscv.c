@@ -1573,7 +1573,7 @@ fail_mpool:
     map_delete(attr->fd_map);
     memory_delete(attr->mem);
     free(rv);
-    return NULL;
+    return false;
 }
 
 static const char *insn_name_table[] = {
