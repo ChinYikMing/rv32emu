@@ -898,17 +898,23 @@ static void rv_reset_hart(riscv_t *rv, riscv_word_t pc)
 #if RV32_HAS(EXT_M)
     rv->csr_misa |= MISA_M;
 #endif
+#if RV32_HAS(EXT_V)
+    rv->csr_vstart = 0;
+    rv->csr_vxsat = 0;
+    rv->csr_vxrm = 0;
+    rv->csr_vcsr = 0;
+    rv->csr_vl = 0;
+    /* Boot with vtype.vill=1 so any vector op before the first vsetvli
+     * traps; this matches Linux/QEMU convention and avoids quietly running
+     * with the implicit (vlmul=1, sew=8) configuration that csr_vtype=0
+     * would imply.
+     */
+    rv->csr_vtype = 1U << 31;
+    rv->csr_vlenb = VLEN / 8;
+#endif
 
     /* Not being halted */
     rv->halt = false;
-
-    /* Clear block cache - translated blocks are stale after reset */
-#if !RV32_HAS(JIT)
-    block_map_clear(rv);
-#else
-    /* For JIT, we need to clear the cache as well */
-    /* TODO: implement cache clearing for JIT mode */
-#endif
 
     /* Set the reset address */
     rv->PC = pc;
@@ -1529,24 +1535,12 @@ bool rv_cold_reboot(riscv_t *rv, riscv_word_t pc)
     if (!rv->block_map.map) { /* check for reboot */
         block_map_init(&rv->block_map, BLOCK_MAP_CAPACITY_BITS);
     }
+
+    /* clear the block map for the first cold boot or reboot */
+    block_map_clear(rv);
 #else
-    if (!rv_init_jit(rv)) {
+    if (!rv_init_jit(rv))
         goto fail_mpool;
-    }
-#endif
-#if RV32_HAS(EXT_V)
-    rv->csr_vstart = 0;
-    rv->csr_vxsat = 0;
-    rv->csr_vxrm = 0;
-    rv->csr_vcsr = 0;
-    rv->csr_vl = 0;
-    /* Boot with vtype.vill=1 so any vector op before the first vsetvli
-     * traps; this matches Linux/QEMU convention and avoids quietly running
-     * with the implicit (vlmul=1, sew=8) configuration that csr_vtype=0
-     * would imply.
-     */
-    rv->csr_vtype = 1U << 31;
-    rv->csr_vlenb = VLEN / 8;
 #endif
 
     return true;
