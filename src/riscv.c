@@ -1062,6 +1062,27 @@ static void free_block_branch_tables(void *block)
     for (rv_insn_t *ir = blk->ir_head; ir; ir = ir->next)
         free(ir->branch_table);
 }
+
+static void block_list_clear(riscv_t *rv)
+{
+    block_t *entry, *safe;
+    list_for_each_entry_safe (entry, safe, &rv->block_list, list) {
+        list_del(&entry->list);
+        free_block_branch_tables(entry);
+
+        rv_insn_t *ir = entry->ir_head;
+        while (ir) {
+            rv_insn_t *next = ir->next;
+            if (ir->fuse) {
+                mpool_free(rv->fuse_mp, ir->fuse);
+            }
+            mpool_free(rv->block_ir_mp, ir);
+            ir = next;
+        }
+        mpool_free(rv->block_mp, entry);
+    }
+    INIT_LIST_HEAD(&rv->block_list);
+}
 #endif
 
 void rv_delete(riscv_t *rv)
@@ -1144,28 +1165,32 @@ static void load_boot_images(vm_attr_t *attr)
 #endif /* RV32_HAS(SYSTEM_MMIO) */
 
 #if RV32_HAS(JIT)
-/* Initialize or reinitialize JIT state and block cache.
+/* Initialize or reinitialize JIT state.
  * Cleans up existing state if present (reboot case).
  * Returns true on success, false on failure.
  */
 static bool rv_init_jit(riscv_t *rv)
 {
-    /* Clean up existing JIT state if present */
-    if (!rv->jit_state) {
-        INIT_LIST_HEAD(&rv->block_list);
-    } else {
+    /* Clean up existing JIT state if present for reboot */
+    if (rv->jit_state) {
+#if RV32_HAS(T2C)
+        rv_terminate_t2c(rv);
+#endif
+        block_list_clear(rv);
+
         jit_state_exit(rv->jit_state);
+        rv->jit_state = NULL;
+        cache_free(rv->block_cache);
+        rv->block_cache = NULL;
     }
+
+    /* Init the block list empty for first boot and reboot */
+    INIT_LIST_HEAD(&rv->block_list);
 
     rv->jit_state = jit_state_init(CODE_CACHE_SIZE);
     if (!rv->jit_state) {
         rv_log_fatal("Failed to initialize JIT state");
         return false;
-    }
-
-    /* Clean up existing block cache if present */
-    if (rv->block_cache) {
-        cache_free(rv->block_cache);
     }
 
     rv->block_cache = cache_create(BLOCK_MAP_CAPACITY_BITS);
