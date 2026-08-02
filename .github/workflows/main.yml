@@ -322,7 +322,7 @@ jobs:
   boot-tests-x64:
     needs: [detect-code-related-file-changes]
     if: needs.detect-code-related-file-changes.outputs.has_code_related_changes == 'true'
-    timeout-minutes: 30  # T2C boot ~18min + build ~3min + setup ~3min
+    timeout-minutes: 35  # T2C boot ~23min + build ~3min + setup ~3min
     strategy:
       fail-fast: false
       matrix:
@@ -346,12 +346,12 @@ jobs:
             boot_type: jit
             defconfig: system_defconfig
             make_flags: "ENABLE_JIT=1 ENABLE_MOP_FUSION=0"
-            timeout: 120
+            timeout: 90
           - compiler: clang
             boot_type: t2c
             defconfig: system_jit_defconfig
             make_flags: "ENABLE_MOP_FUSION=0"
-            timeout: 150
+            timeout: 120
     runs-on: ubuntu-24.04
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
