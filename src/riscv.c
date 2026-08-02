@@ -298,8 +298,10 @@ static bool rv_spawn_t2c(riscv_t *rv)
 
 fail_inline_cache:
     jit_cache_exit(rv->jit_cache);
+    rv->jit_cache = NULL;
 fail_jit_cache:
     cache_free(rv->block_cache);
+    rv->block_cache = NULL;
     return false;
 }
 
@@ -1169,24 +1171,23 @@ static bool rv_init_jit(riscv_t *rv)
     rv->block_cache = cache_create(BLOCK_MAP_CAPACITY_BITS);
     if (!rv->block_cache) {
         rv_log_fatal("Failed to create block cache");
-        jit_state_exit(rv->jit_state);
-        rv->jit_state = NULL;
-        return false;
+        goto fail_jit_state;
     }
 
 #if RV32_HAS(T2C)
     /* Spawn new T2C thread */
     if (!rv_spawn_t2c(rv)) {
         rv_log_fatal("Spawn T2C failed");
-        cache_free(rv->block_cache);
-        rv->block_cache = NULL;
-        jit_state_exit(rv->jit_state);
-        rv->jit_state = NULL;
-        return false;
+        goto fail_jit_state;
     }
 #endif
 
     return true;
+
+fail_jit_state:
+    jit_state_exit(rv->jit_state);
+    rv->jit_state = NULL;
+    return false;
 }
 #endif /* RV32_HAS(JIT) */
 
