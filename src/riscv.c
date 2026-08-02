@@ -305,7 +305,7 @@ fail_jit_cache:
     return false;
 }
 
-void rv_terminate_t2c(riscv_t *rv)
+void rv_destroy_t2c(riscv_t *rv)
 {
     /* Signal the thread to quit */
     pthread_mutex_lock(&rv->wait_queue_lock);
@@ -1095,7 +1095,7 @@ void rv_delete(riscv_t *rv)
     block_map_destroy(rv);
 #else
 #if RV32_HAS(T2C)
-    rv_terminate_t2c(rv);
+    rv_destroy_t2c(rv);
 #endif
     /* Free branch tables for all remaining blocks before freeing cache */
     clear_cache_hot(rv->block_cache, free_block_branch_tables);
@@ -1174,7 +1174,7 @@ static bool rv_init_jit(riscv_t *rv)
     /* Clean up existing JIT state if present for reboot */
     if (rv->jit_state) {
 #if RV32_HAS(T2C)
-        rv_terminate_t2c(rv);
+        rv_destroy_t2c(rv);
 #endif
         block_list_clear(rv);
 
