@@ -58,9 +58,13 @@ int main(int argc, char *argv[])
     fseek(ihandle, 0, SEEK_SET);
     p = (unsigned char *) malloc(0x10000);  // allocate 64k to play with
     GetLeafName(argv[1], szLeaf);
-    printf("//\n// %s\n//\n", szLeaf);         // comment header with filename
-    FixName(szLeaf);                           // remove unusable characters
-    printf("const uint8_t %s[] = {", szLeaf);  // start of data array
+    printf(
+        "//\n// %s\n// FDT library requires 8-byte alignment for DTB "
+        "blob\n//\n",
+        szLeaf);      // comment header with filename
+    FixName(szLeaf);  // remove unusable characters
+    printf("__ALIGNED(8) const uint8_t %s[] = {\n",
+           szLeaf);  // start of data array
     while (iSize) {
         iData = fread(p, 1, 0x10000, ihandle);  // try to read 64k
         MakeC(p, iData, iSize == iData);        // create the output data
