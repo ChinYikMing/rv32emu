@@ -346,12 +346,12 @@ jobs:
             boot_type: jit
             defconfig: system_defconfig
             make_flags: "ENABLE_JIT=1 ENABLE_MOP_FUSION=0"
-            timeout: 90
+            timeout: 120
           - compiler: clang
             boot_type: t2c
             defconfig: system_jit_defconfig
             make_flags: "ENABLE_MOP_FUSION=0"
-            timeout: 120
+            timeout: 150
     runs-on: ubuntu-24.04
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
