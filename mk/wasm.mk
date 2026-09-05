@@ -56,6 +56,14 @@ LDFLAGS += -pthread
 # Note: Emscripten 4.x inlines worker code into the main JS file
 endif
 
+# setjmp/longjmp needs -pthread
+ifeq ($(call has, SYSTEM), 1)
+ifeq ($(call has, ELF_LOADER), 0)
+$(OUT)/emulate.o: CFLAGS += -pthread
+$(OUT)/syscall.o: CFLAGS += -pthread
+endif
+endif
+
 # Emscripten build flags
 CFLAGS_emcc += -sALLOW_MEMORY_GROWTH \
                -s"EXPORTED_FUNCTIONS=$(EXPORTED_FUNCS)" \
