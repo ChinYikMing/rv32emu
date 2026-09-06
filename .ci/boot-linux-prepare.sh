@@ -30,7 +30,7 @@ ACTION=$1
 case "$ACTION" in
     setup)
         # Clone simplefs to use mkfs.simplefs util and create simplefs disk image
-        git clone https://github.com/sysprog21/simplefs.git -b rel2026.0 --depth 1
+        git clone https://github.com/sysprog21/simplefs -b rel2026.0 --depth 1
 
         # Setup disk images
         for disk_img in "${VBLK_IMGS[@]}"; do
