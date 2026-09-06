@@ -62,10 +62,12 @@ for disk_img in "${VBLK_IMGS[@]}"; do
         TEST_OPTIONS+=("${TEST_OPTION}")
         EXPECT_CMDS+=("${EXPECT_CMD}")
 
-        # multiple blocks, Read-only, one disk image, one loop device (/dev/loopx(Linux) or /dev/diskx(Darwin))
-        # FIXME: On macOS, block devices (/dev/diskX) require pread() fallback instead of mmap().
-        # Combined with JIT compilation (especially gcc), this results in significantly slower
-        # I/O performance that exceeds the boot timeout. Skip multi-device tests on macOS.
+        # multiple blocks, Read-only, one disk image, one loop device
+        # (/dev/loopx(Linux) or /dev/diskx(Darwin)) FIXME: On macOS, block
+        # devices (/dev/diskX) require pread() fallback instead of mmap().
+        # Combined with JIT compilation (especially gcc), this results in
+        # significantly slower I/O performance that exceeds the boot timeout.
+        # Skip multi-device tests on macOS.
         if [[ "${OS_TYPE}" == "Darwin" ]]; then
             print_warning "Skipping multi-device readonly test on macOS (block device pread fallback too slow)"
         elif [[ ${disk_img} =~ simplefs ]]; then
@@ -173,10 +175,12 @@ for disk_img in "${VBLK_IMGS[@]}"; do
             EXPECT_CMDS+=("${EXPECT_CMD}")
         fi
 
-        # multiple blocks, Read-write, one disk image and one loop device (/dev/loopx(Linux) or /dev/diskx(Darwin))
-        # FIXME: On macOS, hdiutil locks the disk image file when attached as a block device.
-        # Opening both the original file and its attached block device for read-write access
-        # simultaneously causes pread() to block indefinitely. Skip this test on macOS.
+        # multiple blocks, Read-write, one disk image and one loop device
+        # (/dev/loopx(Linux) or /dev/diskx(Darwin)) FIXME: On macOS, hdiutil
+        # locks the disk image file when attached as a block device. Opening
+        # both the original file and its attached block device for read-write
+        # access simultaneously causes pread() to block indefinitely. Skip this
+        # test on macOS.
         if [[ "${OS_TYPE}" == "Darwin" ]]; then
             print_warning "Skipping combined disk image + block device read-write test on macOS (file locking conflict)"
         elif [[ ${disk_img} =~ simplefs ]]; then
@@ -231,13 +235,13 @@ for disk_img in "${VBLK_IMGS[@]}"; do
 
         # Allow one retry on transient JIT/T2C boot failures. Limit retries to
         # cases that do not persist guest writes into the backing image; a
-        # writable virtio-blk retry could otherwise pass by reusing emu.txt
-        # from an earlier failed attempt.
+        # writable virtio-blk retry could otherwise pass by reusing emu.txt from
+        # an earlier failed attempt.
         #
-        # BOOT_ATTEMPTS_DEFAULT is taken from the environment but validated:
-        # an empty, non-integer, or zero value would otherwise skip the
-        # for-loop entirely and leave ret=0, masking a real failure as a
-        # silent pass. Clamp anything invalid back to the 2-attempt default.
+        # BOOT_ATTEMPTS_DEFAULT is taken from the environment but validated: an
+        # empty, non-integer, or zero value would otherwise skip the for-loop
+        # entirely and leave ret=0, masking a real failure as a silent pass.
+        # Clamp anything invalid back to the 2-attempt default.
         BOOT_ATTEMPTS=1
         if [[ ! "${TEST_OPTIONS[$i]}" =~ vblk ]] || [[ "${TEST_OPTIONS[$i]}" =~ readonly ]]; then
             BOOT_ATTEMPTS_RAW=${BOOT_ATTEMPTS_DEFAULT:-2}
@@ -272,11 +276,15 @@ for disk_img in "${VBLK_IMGS[@]}"; do
 
         printf "\nBoot Linux Test: [ ${MESSAGES[$ret]}${COLOR_N} ]\n"
         if [[ "${TEST_OPTIONS[$i]}" =~ vblk ]]; then
-            # read-only test first, so the emu.txt definitely does not exist, skipping the check
+
+            # read-only test first, so the emu.txt definitely does not exist,
+            # skipping the check
             if [[ ! "${TEST_OPTIONS[$i]}" =~ readonly ]]; then
                 if [[ ${disk_img} =~ simplefs ]]; then
-                    # Does not verify the written file on hostOS since 7z does not recognize the format.
-                    # But, the written file is printed out and verified in EXPECT_CMD in guestOS
+
+                    # Does not verify the written file on hostOS since 7z does
+                    # not recognize the format. But, the written file is printed
+                    # out and verified in EXPECT_CMD in guestOS
                     :
                 else
                     7z l ${disk_img} | grep emu.txt > /dev/null 2>&1 || ret=4

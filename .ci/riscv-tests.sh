@@ -6,11 +6,22 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 set -e -u -o pipefail
 
-# Install RISCOF
-# Note: riscv-config 3.18.3 pins pyyaml==5.2, but PyYAML 5.x fails to build on
-# Python 3.12 (Cython compatibility). Since requirements.txt is a full freeze
-# of all transitive dependencies, use --no-deps to bypass resolver conflicts.
-# riscof also depends on riscv-config, so --no-deps prevents re-triggering.
+# The Sail reference model comes from the prebuilt releases; resolve the tag
+# here so callers do not each have to remember to export it.
+# Assign before exporting: "export VAR=$(cmd)" takes its exit status from
+# export, so set -e cannot see the command substitution fail and the script
+# would carry on with an empty tag.
+if [ -z "${LATEST_RELEASE:-}" ]; then
+    LATEST_RELEASE=$(fetch_latest_release sail)
+fi
+export LATEST_RELEASE
+
+# Install RISCOF.
+# Note: riscv-config 3.18.3 pins pyyaml==5.2, but PyYAML 5.x
+# fails to build on Python 3.12 (Cython compatibility). Since requirements.txt
+# is a full freeze of all transitive dependencies, use --no-deps to bypass
+# resolver conflicts. riscof also depends on riscv-config, so --no-deps prevents
+# re-triggering.
 pip3 install --no-deps riscv-config==3.18.3
 pip3 install --no-deps -r .ci/requirements.txt
 # Smoke test: verify riscv-config works with PyYAML 6.x
@@ -23,7 +34,9 @@ python3 -c "import riscv_config; print('riscv-config import OK')"
 DBGEN_PATH=$(python3 -c "import riscof; import os; print(os.path.join(os.path.dirname(riscof.__file__), 'dbgen.py'))")
 if grep -q 'if key not in list:' "$DBGEN_PATH" 2> /dev/null; then
     echo "Patching RISCOF dbgen.py: fixing 'list' -> 'flist' bug"
-    # Use portable sed in-place: create temp file, then move (works on both Linux and macOS)
+
+    # Use portable sed in-place: create temp file, then move (works on both
+    # Linux and macOS)
     sed 's/if key not in list:/if key not in flist:/' "$DBGEN_PATH" > "${DBGEN_PATH}.tmp" \
         && mv "${DBGEN_PATH}.tmp" "$DBGEN_PATH"
 fi
@@ -33,7 +46,9 @@ set -x
 export PATH=$(pwd)/toolchain/bin:$PATH
 
 make distclean
-# Generate config with all RISC-V extensions (including B-extension: Zba/Zbb/Zbc/Zbs)
+
+# Generate config with all RISC-V extensions (including B-extension:
+# Zba/Zbb/Zbc/Zbs)
 make defconfig
 make ENABLE_ARCH_TEST=1 ENABLE_EXT_M=1 ENABLE_EXT_A=1 ENABLE_EXT_F=1 ENABLE_EXT_C=1 \
     ENABLE_Zicsr=1 ENABLE_Zifencei=1 \
@@ -57,7 +72,8 @@ esac
 cp "build/rv32emu-prebuilt-sail-${HOST_PLATFORM}" tests/arch-test-target/sail_cSim/riscv_sim_RV32
 chmod +x tests/arch-test-target/sail_cSim/riscv_sim_RV32
 
-# Run architecture tests in parallel (each uses device-specific work directory and config)
+# Run architecture tests in parallel (each uses device-specific work directory
+# and config)
 arch_test_pids=()
 arch_test_devices=("IMAFCZicsrZifencei" "FCZicsr" "IMZbaZbbZbcZbs")
 
@@ -85,9 +101,9 @@ make defconfig
 make ENABLE_ARCH_TEST=1 ENABLE_RV32E=1 $PARALLEL
 make ENABLE_ARCH_TEST=1 arch-test RISCV_DEVICE=E SKIP_PREREQ=1 $PARALLEL || exit 1
 
-# Rebuild with JIT
-# Do not run the architecture test with "Zicsr" extension. It ignores
-# the hardware misalignment (hw_data_misaligned_support) option.
+# Rebuild with JIT.
+# Do not run the architecture test with "Zicsr" extension. It
+# ignores the hardware misalignment (hw_data_misaligned_support) option.
 make distclean
 make jit_defconfig
 make ENABLE_ARCH_TEST=1 ENABLE_T2C=0 \

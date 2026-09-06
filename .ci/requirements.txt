@@ -18,7 +18,10 @@ pytest==9.0.3
 python-dateutil==2.9.0.post0
 pytz==2025.1
 PyYAML==6.0.2
-riscof @ git+https://github.com/riscv/riscof.git@d38859f85fe407bcacddd2efcd355ada4683aee4
+# Commit pin, not a tag, because upstream stopped tagging at 1.25.3 (Jan 2023)
+# and this commit is 16 commits past it. Converting this to the newest tag would
+# roll riscof back by a year and a half; retag upstream first if you want one.
+riscof @ git+https://github.com/riscv/riscof@d38859f85fe407bcacddd2efcd355ada4683aee4
 # riscv-config installed separately in riscv-tests.sh (--no-deps) due to pyyaml==5.2 conflict
 riscv-isac==0.18.0
 ruamel.yaml==0.18.10

@@ -6,20 +6,24 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   detect-code-related-file-changes:
     runs-on: ubuntu-24.04
     outputs:
-      has_code_related_changes: ${{ steps.set_has_code_related_changes.outputs.has_code_related_changes }}
+      has_code_related_changes: ${{ steps.changed-files.outputs.any_changed }}
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
       - name: Test changed files
         id: changed-files
         uses: tj-actions/changed-files@v47
         with:
           files: |
               .ci/**
+              .github/actions/**
               .github/workflows/**
               build/**
               configs/**
@@ -31,23 +35,54 @@ jobs:
               .clang-format
               Dockerfile
               Makefile
-              # Build system configuration
-              mk/kconfig.mk
-              mk/toolchain.mk
-              tools/detect-env.py
-      - name: Set has_code_related_changes
-        id: set_has_code_related_changes
-        run: |
-          if [[ ${{ steps.changed-files.outputs.any_changed }} == true ]]; then
-            echo "has_code_related_changes=true" >> $GITHUB_OUTPUT
-          else
-            echo "has_code_related_changes=false" >> $GITHUB_OUTPUT
-          fi
 
-  host-x64:
+  # Emscripten output is platform independent, so it is built once on x64
+  # rather than in every host matrix leg.
+  wasm-build:
+    name: emcc build
     needs: [detect-code-related-file-changes]
     if: needs.detect-code-related-file-changes.outputs.has_code_related_changes == 'true'
-    timeout-minutes: 60
+    timeout-minutes: 30
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: 'true'
+
+      - name: Set up build environment
+        uses: ./.github/actions/setup-build
+        with:
+          llvm: 'false'
+          # No artifact prefetch: the build steps below open with "make
+          # distclean", which would throw away anything downloaded here.
+
+      - name: Set up emsdk
+        uses: mymindstorm/setup-emsdk@v16
+        with:
+          version: 3.1.51
+          actions-cache-folder: 'emsdk-cache'
+
+      # Note: wasm_defconfig sets CONFIG_BUILD_WASM=y which auto-selects CC=emcc
+      - name: Build user emulation
+        run: |
+              make distclean
+              make wasm_defconfig
+              .ci/emsdk-warm-cache.sh
+              make $PARALLEL
+
+      - name: Build system emulation
+        run: |
+              make distclean
+              make wasm_defconfig
+              make ENABLE_SYSTEM=1 ENABLE_GOLDFISH_RTC=1 $PARALLEL
+
+  host-x64:
+    name: x64 ${{ matrix.compiler }}
+    needs: [detect-code-related-file-changes]
+    if: needs.detect-code-related-file-changes.outputs.has_code_related_changes == 'true'
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
@@ -56,177 +91,26 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: 'true'
 
-    - name: Read LLVM Version
-      id: llvm-version
-      run: echo "version=$(cat .ci/llvm-version)" >> $GITHUB_OUTPUT
-
-    - name: Cache LLVM
-      id: cache-llvm
-      uses: actions/cache@v5
-      with:
-        path: /usr/lib/llvm-${{ steps.llvm-version.outputs.version }}
-        key: ${{ runner.os }}-${{ runner.arch }}-llvm-${{ steps.llvm-version.outputs.version }}
-
-    - name: Cache RISC-V Toolchain
-      id: cache-toolchain
-      uses: actions/cache@v5
-      with:
-        path: ${{ github.workspace }}/toolchain
-        key: ${{ runner.os }}-${{ runner.arch }}-riscv-toolchain-${{ hashFiles('.ci/riscv-toolchain-install.sh') }}
-
-    - name: Install dependencies
-      run: |
-            set +e  # Disable errexit
-            # Configure apt to tolerate mirror sync failures
-            sudo tee /etc/apt/apt.conf.d/99-ci-reliability > /dev/null << 'EOF'
-            APT::Update::Error-Mode "any";
-            Acquire::IndexTargets::deb::DEP-11::DefaultEnabled "false";
-            Acquire::IndexTargets::deb::DEP-11-icons::DefaultEnabled "false";
-            Acquire::IndexTargets::deb::DEP-11-icons-hidpi::DefaultEnabled "false";
-            Acquire::Retries "3";
-            Acquire::Check-Valid-Until "false";
-            EOF
-            # Update with error tolerance
-            sudo apt-get update -q=2 2>&1
-            UPDATE_EXIT=$?
-            if [ $UPDATE_EXIT -ne 0 ]; then
-              echo "WARNING: apt update exited with code $UPDATE_EXIT, continuing..."
-            fi
-            sudo apt-get install -q=2 curl wget lsb-release software-properties-common gnupg \
-                 libsdl2-dev libsdl2-mixer-dev device-tree-compiler expect bc p7zip-full
-            set -e  # Re-enable errexit
-      shell: bash
-
-    - name: Install RISC-V Toolchain
-      if: steps.cache-toolchain.outputs.cache-hit != 'true'
-      run: |
-            .ci/riscv-toolchain-install.sh
-
-    - name: Setup RISC-V Toolchain PATH
-      run: echo "${{ github.workspace }}/toolchain/bin" >> $GITHUB_PATH
-
-    - name: Install LLVM
-      if: steps.cache-llvm.outputs.cache-hit != 'true'
-      run: |
-            # LLVM is pinned in .ci/llvm-version. Ubuntu Noble's base repos cap
-            # at llvm-18, so anything newer (the current pin is 20+) requires
-            # apt.llvm.org. .ci/install-llvm.sh adds the apt source after
-            # verifying the signing key fingerprint matches the value pinned
-            # in that script (avoids sudo-executing an unpinned remote script).
-            VER='${{ steps.llvm-version.outputs.version }}'
-            sudo .ci/install-llvm.sh "${VER}"
-            sudo apt-get install -y -q=2 \
-                llvm-${VER} llvm-${VER}-dev llvm-${VER}-runtime \
-                clang-${VER} lld-${VER}
-
-    - name: Setup LLVM PATH
-      run: echo "/usr/lib/llvm-${{ steps.llvm-version.outputs.version }}/bin" >> $GITHUB_PATH
-
-    - name: Install compiler
-      id: install_cc
-      uses: rlalik/setup-cpp-compiler@master
+    - name: Set up build environment
+      id: setup
+      uses: ./.github/actions/setup-build
       with:
         compiler: ${{ matrix.compiler }}
-    - name: Setup emsdk
-      uses: mymindstorm/setup-emsdk@v14
-      with:
-        version: 3.1.51
-        actions-cache-folder: 'emsdk-cache'
-    - name: Set parallel jobs variable
-      run: |
-            echo "PARALLEL=-j$(nproc)" >> "$GITHUB_ENV"
-            echo "BOOT_LINUX_TEST=TMP_FILE=\$(mktemp "$RUNNER_TEMP/tmpfile.XXXXXX"); \
-                                  sudo env TMP_FILE=\${TMP_FILE} .ci/boot-linux-prepare.sh setup; \
-                                  . \${TMP_FILE}; \
-                                  .ci/boot-linux.sh; \
-                                  EXIT_CODE=\$?; \
-                                  sudo env TMP_FILE=\${TMP_FILE} BLK_DEV_EXT4=\${BLK_DEV_EXT4} \
-                                           BLK_DEV_SIMPLEFS=\${BLK_DEV_SIMPLEFS} .ci/boot-linux-prepare.sh cleanup; \
-                                  exit \${EXIT_CODE};" >> "$GITHUB_ENV"
-    - name: Cache build artifacts
-      uses: actions/cache@v5
-      with:
-        path: build/
-        key: rv32emu-artifacts-${{ runner.os }}-${{ hashFiles('mk/artifact.mk', 'mk/external.mk') }}
-        restore-keys: |
-          rv32emu-artifacts-${{ runner.os }}-
-
-    - name: Fetch artifacts
-      env:
-        CC: ${{ steps.install_cc.outputs.cc }}
-      run: |
-            . .ci/common.sh
-            fetch_artifact ELF
-            fetch_artifact Linux-Image ENABLE_SYSTEM=1
-            rm -f build/.config  # Clean config after ENABLE_SYSTEM=1 to prevent contamination
-            fetch_artifact sail ENABLE_ARCH_TEST=1
-            # get from rv32emu-prebuilt
-            .ci/fetch.sh -o build/shareware_doom_iwad.zip "https://raw.githubusercontent.com/sysprog21/rv32emu-prebuilt/doom-artifact/shareware_doom_iwad.zip"
-            unzip -o -d build/ build/shareware_doom_iwad.zip
-
-    # emcc builds run on x64 only - WebAssembly output is platform-independent
-    # This validates Emscripten compatibility without redundant builds on macOS
-    # Note: wasm_defconfig sets CONFIG_BUILD_WASM=y which auto-selects CC=emcc
-    #
-    # Emscripten's first parallel build of the SDL2/SDL2_mixer ports races on
-    # the internal cache lock (one emcc process spawns a child that tries to
-    # take the same lock its parent already holds). Pre-warm the cache with
-    # embuilder so the parallel make doesn't have to build the ports.
-    - name: default build using emcc
-      if: success()
-      run: |
-            make distclean
-            make wasm_defconfig
-            embuilder build sdl2 sdl2_mixer || true
-            make $PARALLEL
-
-    - name: default build for system emulation using emcc
-      if: success()
-      run: |
-            make distclean
-            make wasm_defconfig
-            embuilder build sdl2 sdl2_mixer || true
-            make ENABLE_SYSTEM=1 ENABLE_GOLDFISH_RTC=1 $PARALLEL
-            make distclean
+        riscv-toolchain: 'true'
+        artifacts: elf linux-image doom
+        cache-suffix: host-${{ matrix.compiler }}
 
     - name: Build with various optimization levels
-      if: success()
-      env:
-        CC: ${{ steps.install_cc.outputs.cc }}
-      run: |
-            set -euo pipefail
-            # Test boundary cases: -O0 (unoptimized), -O2 (standard), -Ofast (aggressive)
-            for opt_level in -O0 -O2 -Ofast; do
-              echo "Building with OPT_LEVEL=$opt_level"
-              if ! (make distclean && make defconfig && make OPT_LEVEL=$opt_level $PARALLEL); then
-                echo "ERROR: Build failed with OPT_LEVEL=$opt_level"
-                exit 1
-              fi
-            done
+      run: .ci/build-opt-levels.sh defconfig
 
     - name: Build system emulation with various optimization levels
-      if: success()
-      env:
-        CC: ${{ steps.install_cc.outputs.cc }}
-      run: |
-            set -euo pipefail
-            # Test boundary cases: -O0 (unoptimized), -O2 (standard), -Ofast (aggressive)
-            for opt_level in -O0 -O2 -Ofast; do
-              echo "Building system emulation with OPT_LEVEL=$opt_level"
-              if ! (make distclean && make system_defconfig && make OPT_LEVEL=$opt_level $PARALLEL); then
-                echo "ERROR: System emulation build failed with OPT_LEVEL=$opt_level"
-                exit 1
-              fi
-            done
+      run: .ci/build-opt-levels.sh system_defconfig
 
     - name: check + tests
-      if: success()
-      env:
-        CC: ${{ steps.install_cc.outputs.cc }}
       run: |
             make cleanconfig
             make defconfig
@@ -235,70 +119,26 @@ jobs:
             make misalign $PARALLEL
             make tool $PARALLEL
 
-    - name: core extension disable tests (interpreter + JIT)
-      if: success()
-      env:
-        CC: ${{ steps.install_cc.outputs.cc }}
-      run: |
-            set -euo pipefail
-            # Core extensions + bit manipulation + CSR/fence + performance features
-            # Tests both interpreter and JIT modes (12 × 2 = 24 builds)
-            # Consolidated from 25 separate builds (13 interpreter + 12 JIT)
-            # Use cleanconfig instead of distclean to preserve artifacts across iterations
-            for ext in ENABLE_EXT_M ENABLE_EXT_A ENABLE_EXT_F ENABLE_EXT_C \
-                       ENABLE_Zba ENABLE_Zbb ENABLE_Zbc ENABLE_Zbs \
-                       ENABLE_Zicsr ENABLE_Zifencei \
-                       ENABLE_MOP_FUSION ENABLE_BLOCK_CHAINING; do
-              echo "Testing ${ext}=0 (interpreter)"
-              if ! (make cleanconfig && make defconfig && make ${ext}=0 check $PARALLEL); then
-                echo "ERROR: Interpreter test failed with ${ext}=0"
-                exit 1
-              fi
-              echo "Testing ${ext}=0 (JIT)"
-              if ! (make cleanconfig && make jit_defconfig && make ${ext}=0 check $PARALLEL); then
-                echo "ERROR: JIT test failed with ${ext}=0"
-                exit 1
-              fi
-            done
-
     - name: SDL disable test
-      if: success()
-      env:
-        CC: ${{ steps.install_cc.outputs.cc }}
       run: |
-            # SDL is graphics subsystem, interpreter-only test sufficient
+            # SDL is the graphics subsystem; an interpreter-only test suffices.
             make distclean && make defconfig && make ENABLE_SDL=0 check $PARALLEL
 
     - name: misalignment test in block emulation
-      if: success()
-      env:
-        CC: ${{ steps.install_cc.outputs.cc }}
       run: |
             make -C tests/system/alignment/
             make distclean && make system_defconfig && make ENABLE_ELF_LOADER=1 ENABLE_EXT_C=0 misalign-in-blk-emu $PARALLEL
 
     - name: MMU test
-      if: success()
-      env:
-        CC: ${{ steps.install_cc.outputs.cc }}
       run: |
             make -C tests/system/mmu/
             make distclean && make system_defconfig && make ENABLE_ELF_LOADER=1 mmu-test $PARALLEL
 
     - name: gdbstub test
-      if: success()
-      env:
-        CC: ${{ steps.install_cc.outputs.cc }}
-      run: |
-            make distclean && make defconfig && make ENABLE_GDBSTUB=1 gdbstub-test $PARALLEL
+      run: make distclean && make defconfig && make ENABLE_GDBSTUB=1 gdbstub-test $PARALLEL
 
     - name: JIT base test
-      if: success()
-      env:
-        CC: ${{ steps.install_cc.outputs.cc }}
-      run: |
-            # Base JIT test (extension disable tests handled in consolidated step above)
-            make distclean && make jit_defconfig && make check $PARALLEL
+      run: make distclean && make jit_defconfig && make check $PARALLEL
 
     - name: undefined behavior test
       if: success() || failure()
@@ -306,20 +146,80 @@ jobs:
             make distclean && make defconfig && make ENABLE_UBSAN=1 check $PARALLEL
             make distclean && make jit_defconfig && make ENABLE_UBSAN=1 check $PARALLEL
 
-    # Boot tests moved to boot-tests-x64 job for parallel execution
+  # Each optional feature is independently switchable, so every one of them is
+  # built with the knob off. Split across runners because the serial run of all
+  # 24 builds dominated the job it used to live in.
+  host-x64-feature-disable:
+    name: x64 ${{ matrix.compiler }} feature disable (${{ matrix.group }})
+    needs: [detect-code-related-file-changes]
+    if: needs.detect-code-related-file-changes.outputs.has_code_related_changes == 'true'
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [gcc, clang]
+        group: [core, bitmanip-perf]   # .ci/test-ext-disable.sh owns the members
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        submodules: 'true'
+
+    - name: Set up build environment
+      id: setup
+      uses: ./.github/actions/setup-build
+      with:
+        compiler: ${{ matrix.compiler }}
+        riscv-toolchain: 'true'
+        artifacts: elf
+        cache-suffix: feature-${{ matrix.compiler }}-${{ matrix.group }}
+
+    - name: Feature disable tests (interpreter + JIT)
+      run: .ci/test-ext-disable.sh ${{ matrix.group }}
+
+  # The architecture test is compiler agnostic: it validates the emulator
+  # against the Sail model, so a second host compiler adds runtime, not
+  # coverage. It is x64 only, since the macOS runners are the scarcest
+  # resource in this workflow and provide nothing the Linux run does not.
+  arch-test-x64:
+    name: RISC-V architecture test
+    needs: [detect-code-related-file-changes]
+    if: needs.detect-code-related-file-changes.outputs.has_code_related_changes == 'true'
+    timeout-minutes: 45
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        submodules: 'true'
+
+    - name: Set up build environment
+      id: setup
+      uses: ./.github/actions/setup-build
+      with:
+        compiler: gcc
+        llvm: 'false'
+        riscv-toolchain: 'true'
+        # No artifact prefetch: riscv-tests.sh starts with "make distclean",
+        # so anything cached under build/ would be thrown away unread.
+
+    - name: Set up Python
+      uses: actions/setup-python@v7
+      with:
+        python-version: '3.12'
+        cache: 'pip'
+        cache-dependency-path: .ci/requirements.txt
 
     - name: Architecture test
-      if: success()
-      env:
-        CC: ${{ steps.install_cc.outputs.cc }}
-      run: |
-            . .ci/common.sh
-            export LATEST_RELEASE=$(fetch_latest_release sail)
-            .ci/riscv-tests.sh
+      run: .ci/riscv-tests.sh
 
-  # Parallel boot tests for x64 - runs interpreter, JIT, and T2C boot tests concurrently
-  # T2C runs only on clang since it uses LLVM
+  # Boot tests are the long pole of the workflow, so each configuration gets
+  # its own runner. T2C is clang only because it goes through LLVM.
   boot-tests-x64:
+    name: x64 ${{ matrix.compiler }} boot (${{ matrix.boot_type }})
     needs: [detect-code-related-file-changes]
     if: needs.detect-code-related-file-changes.outputs.has_code_related_changes == 'true'
     timeout-minutes: 40  # T2C boot ~30min + build ~3min + setup ~3min
@@ -356,96 +256,35 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: 'true'
 
-    - name: Read LLVM Version
-      if: matrix.compiler == 'clang'
-      id: llvm-version
-      run: echo "version=$(cat .ci/llvm-version)" >> $GITHUB_OUTPUT
-
-    # LLVM needed for all clang builds (llvm-ar required for LTO)
-    - name: Cache LLVM
-      if: matrix.compiler == 'clang'
-      id: cache-llvm
-      uses: actions/cache@v5
-      with:
-        path: /usr/lib/llvm-${{ steps.llvm-version.outputs.version }}
-        key: ${{ runner.os }}-${{ runner.arch }}-llvm-${{ steps.llvm-version.outputs.version }}
-
-    - name: Install dependencies
-      run: |
-            sudo apt-get update -q=2 || true
-            sudo apt-get install -q=2 curl wget lsb-release software-properties-common gnupg \
-                 libsdl2-dev libsdl2-mixer-dev device-tree-compiler expect bc p7zip-full e2fsprogs
-
-    - name: Install LLVM
-      if: matrix.compiler == 'clang' && steps.cache-llvm.outputs.cache-hit != 'true'
-      run: |
-            VER='${{ steps.llvm-version.outputs.version }}'
-            sudo .ci/install-llvm.sh "${VER}"
-            sudo apt-get install -y -q=2 \
-                llvm-${VER} llvm-${VER}-dev llvm-${VER}-runtime \
-                clang-${VER} lld-${VER}
-
-    - name: Setup LLVM PATH
-      if: matrix.compiler == 'clang'
-      run: echo "/usr/lib/llvm-${{ steps.llvm-version.outputs.version }}/bin" >> $GITHUB_PATH
-
-    - name: Install compiler
-      id: install_cc
-      uses: rlalik/setup-cpp-compiler@master
+    - name: Set up build environment
+      id: setup
+      uses: ./.github/actions/setup-build
       with:
         compiler: ${{ matrix.compiler }}
-
-    - name: Set parallel jobs variable
-      run: |
-            echo "PARALLEL=-j$(nproc)" >> "$GITHUB_ENV"
-            echo "BOOT_LINUX_TEST=TMP_FILE=\$(mktemp \"$RUNNER_TEMP/tmpfile.XXXXXX\"); \
-                                  sudo env TMP_FILE=\${TMP_FILE} .ci/boot-linux-prepare.sh setup; \
-                                  . \${TMP_FILE}; \
-                                  .ci/boot-linux.sh; \
-                                  EXIT_CODE=\$?; \
-                                  sudo env TMP_FILE=\${TMP_FILE} BLK_DEV_EXT4=\${BLK_DEV_EXT4} \
-                                           BLK_DEV_SIMPLEFS=\${BLK_DEV_SIMPLEFS} .ci/boot-linux-prepare.sh cleanup; \
-                                  exit \${EXIT_CODE};" >> "$GITHUB_ENV"
-
-    # Cache key includes matrix variables to prevent cross-contamination between parallel jobs
-    - name: Cache build artifacts
-      uses: actions/cache@v5
-      with:
-        path: build/
-        key: rv32emu-boot-${{ runner.os }}-${{ matrix.compiler }}-${{ matrix.boot_type }}-${{ hashFiles('mk/artifact.mk', 'mk/external.mk') }}
-        restore-keys: |
-          rv32emu-boot-${{ runner.os }}-${{ matrix.compiler }}-${{ matrix.boot_type }}-
-          rv32emu-artifacts-${{ runner.os }}-
-
-    - name: Fetch Linux artifacts
-      env:
-        CC: ${{ steps.install_cc.outputs.cc }}
-      run: |
-            . .ci/common.sh
-            fetch_artifact Linux-Image ENABLE_SYSTEM=1
-            rm -f build/.config
+        llvm: ${{ matrix.compiler == 'clang' }}
+        artifacts: linux-image
+        cache-suffix: boot-${{ matrix.compiler }}-${{ matrix.boot_type }}
 
     - name: boot Linux kernel test (${{ matrix.boot_type }})
       env:
-        CC: ${{ steps.install_cc.outputs.cc }}
         BOOT_TIMEOUT: ${{ matrix.timeout }}
       run: |
-            # For T2C, verify LLVM (pinned to .ci/llvm-version) was detected
-            if [ "${{ matrix.boot_type }}" = "t2c" ]; then
-              rm -f build/t2c.o
-            fi
+            # A stale object would mask a failed LLVM detection below.
+            rm -f build/t2c.o
             make distclean && make ${{ matrix.defconfig }} && make INITRD_SIZE=32 ${{ matrix.make_flags }} $PARALLEL && make artifact $PARALLEL
             if [ "${{ matrix.boot_type }}" = "t2c" ]; then
               test -f build/t2c.o || { echo "ERROR: T2C disabled (build/t2c.o missing) - LLVM $(cat .ci/llvm-version) detection failed"; exit 1; }
             fi
-            bash -c "${BOOT_LINUX_TEST}"
+            .ci/boot-linux-test.sh
 
   # Native AArch64 on GitHub ARM runners - fast, no QEMU overhead
+  # FIXME: gcc build fails on AArch64/Linux hosts, hence clang only
   host-arm64:
+    name: arm64 clang
     needs: [detect-code-related-file-changes]
     if: needs.detect-code-related-file-changes.outputs.has_code_related_changes == 'true'
     timeout-minutes: 45
@@ -454,79 +293,27 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
     - name: checkout code
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
       with:
         submodules: 'true'
 
-    - name: Set LLVM version
-      run: echo "LLVM_VERSION=$(cat .ci/llvm-version)" >> $GITHUB_ENV
+    - name: Set up build environment
+      id: setup
+      uses: ./.github/actions/setup-build
+      with:
+        # Plain "clang" resolves through the LLVM bin directory this action
+        # prepends to PATH, so it is the pinned LLVM, not the distro's.
+        cc: clang
+        artifacts: elf linux-image
+        cache-suffix: host
 
-    - name: Install dependencies
-      run: |
-            # Configure apt to tolerate ARM mirror sync failures
-            sudo tee /etc/apt/apt.conf.d/99-ci-reliability > /dev/null << 'EOF'
-            APT::Update::Error-Mode "any";
-            Acquire::IndexTargets::deb::DEP-11::DefaultEnabled "false";
-            Acquire::IndexTargets::deb::DEP-11-icons::DefaultEnabled "false";
-            Acquire::IndexTargets::deb::DEP-11-icons-hidpi::DefaultEnabled "false";
-            Acquire::Retries "3";
-            Acquire::Check-Valid-Until "false";
-            EOF
-            # Update with error tolerance
-            sudo apt-get update -q=2 || {
-              echo "WARNING: apt update failed, continuing with cached indexes..."
-            }
-            # Install packages with retry for critical ones
-            sudo apt-get install -q=2 -y make curl wget libsdl2-dev libsdl2-mixer-dev \
-                 lsb-release software-properties-common gnupg bc device-tree-compiler expect p7zip-full e2fsprogs || {
-              echo "WARNING: Some packages failed, retrying critical ones..."
-              sudo apt-get install -q=2 -y --no-download make curl wget || true
-            }
-
-    - name: Install LLVM
-      run: |
-            sudo .ci/install-llvm.sh "${LLVM_VERSION}"
-            sudo apt-get install -y -q=2 \
-                llvm-${LLVM_VERSION} llvm-${LLVM_VERSION}-dev \
-                llvm-${LLVM_VERSION}-runtime \
-                clang-${LLVM_VERSION} lld-${LLVM_VERSION}
-
-    - name: Setup LLVM PATH
-      run: echo "/usr/lib/llvm-${LLVM_VERSION}/bin" >> $GITHUB_PATH
-
-    - name: Set parallel jobs variable
-      run: |
-            echo "PARALLEL=-j$(nproc)" >> "$GITHUB_ENV"
-            echo "BOOT_LINUX_TEST=TMP_FILE=\$(mktemp \"$RUNNER_TEMP/tmpfile.XXXXXX\"); \
-                                  sudo env TMP_FILE=\${TMP_FILE} .ci/boot-linux-prepare.sh setup; \
-                                  . \${TMP_FILE}; \
-                                  .ci/boot-linux.sh; \
-                                  EXIT_CODE=\$?; \
-                                  sudo env TMP_FILE=\${TMP_FILE} BLK_DEV_EXT4=\${BLK_DEV_EXT4} \
-                                           BLK_DEV_SIMPLEFS=\${BLK_DEV_SIMPLEFS} .ci/boot-linux-prepare.sh cleanup; \
-                                  exit \${EXIT_CODE};" >> "$GITHUB_ENV"
-
-    - name: Fetch artifacts
-      env:
-        CC: clang-${{ env.LLVM_VERSION }}
-      run: |
-            . .ci/common.sh
-            fetch_artifact ELF
-            fetch_artifact Linux-Image ENABLE_SYSTEM=1
-            rm -f build/.config  # Clean config after ENABLE_SYSTEM=1 to prevent contamination
-
-    # FIXME: gcc build fails on AArch64/Linux hosts
     - name: check + tests
-      env:
-        CC: clang-${{ env.LLVM_VERSION }}
       run: |
             make cleanconfig
             make defconfig
             make check $PARALLEL
 
     - name: JIT tests
-      env:
-        CC: clang-${{ env.LLVM_VERSION }}
       run: |
             set -euo pipefail
             make distclean && make jit_defconfig && make check $PARALLEL
@@ -536,24 +323,21 @@ jobs:
             done
 
     - name: boot Linux kernel test (T2C)
-      if: success()
       env:
-        CC: clang-${{ env.LLVM_VERSION }}
         BOOT_TIMEOUT: 120  # T2C with O1 optimization (via defconfig) is faster than O3
       run: |
-            # Remove stale t2c.o before build to ensure fresh detection
+            # A stale object would mask a failed LLVM detection below.
             rm -f build/t2c.o
             # system_jit_defconfig uses T2C_OPT_LEVEL=1 for ~50% faster LLVM compilation
             make distclean && make system_jit_defconfig && make INITRD_SIZE=32 ENABLE_MOP_FUSION=0 $PARALLEL && make artifact $PARALLEL
-            # Verify T2C is actually compiled (build/t2c.o only exists when LLVM (.ci/llvm-version) is detected)
-            test -f build/t2c.o || { echo "ERROR: T2C disabled (build/t2c.o missing) - LLVM ${LLVM_VERSION} detection failed"; exit 1; }
-            bash -c "${BOOT_LINUX_TEST}"
-            make clean
+            test -f build/t2c.o || { echo "ERROR: T2C disabled (build/t2c.o missing) - LLVM ${{ steps.setup.outputs.llvm-version }} detection failed"; exit 1; }
+            .ci/boot-linux-test.sh
 
   macOS-arm64:
+    name: macOS ${{ matrix.compiler }}
     needs: [detect-code-related-file-changes]
     if: needs.detect-code-related-file-changes.outputs.has_code_related_changes == 'true'
-    timeout-minutes: 80
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -562,97 +346,20 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
-     - uses: actions/checkout@v6
+     - uses: actions/checkout@v7
        with:
          submodules: 'true'
 
-     - name: Read LLVM Version
-       id: llvm-version
-       run: echo "version=$(cat .ci/llvm-version)" >> $GITHUB_OUTPUT
-
-     - name: Cache RISC-V Toolchain
-       id: cache-toolchain
-       uses: actions/cache@v5
-       with:
-         path: ${{ github.workspace }}/toolchain
-         key: ${{ runner.os }}-${{ runner.arch }}-riscv-toolchain-${{ hashFiles('.ci/riscv-toolchain-install.sh') }}
-
-     - name: Cache Homebrew packages
-       id: cache-brew
-       uses: actions/cache@v5
-       with:
-         path: |
-           /opt/homebrew/Cellar/llvm@${{ steps.llvm-version.outputs.version }}
-           /opt/homebrew/Cellar/sdl2
-           /opt/homebrew/Cellar/dtc
-         key: ${{ runner.os }}-${{ runner.arch }}-brew-llvm${{ steps.llvm-version.outputs.version }}-${{ hashFiles('.github/workflows/main.yml') }}
-
-     - name: Install dependencies
-       run: |
-             brew install make dtc expect sdl2 bc e2fsprogs p7zip llvm@${{ steps.llvm-version.outputs.version }} dcfldd
-             brew install sdl2_mixer || echo "Warning: sdl2_mixer installation failed, continuing without SDL_MIXER support"
-             # Ensure symlinks exist after cache restore (cached Cellar may lack /opt/homebrew/bin links)
-             brew link dtc --overwrite 2>/dev/null || true
-             command -v dtc || { echo "ERROR: dtc not found in PATH after install"; exit 1; }
-
-     - name: Install RISC-V Toolchain
-       if: steps.cache-toolchain.outputs.cache-hit != 'true'
-       run: |
-             .ci/riscv-toolchain-install.sh
-
-     - name: Setup toolchain paths
-       run: |
-             echo "${{ github.workspace }}/toolchain/bin" >> $GITHUB_PATH
-             echo "$(brew --prefix llvm@${{ steps.llvm-version.outputs.version }})/bin" >> $GITHUB_PATH
-     - name: Set up Python 3.12
-       uses: actions/setup-python@v6
-       with:
-         python-version: '3.12'
-     - name: Install compiler
-       id: install_cc
-       uses: rlalik/setup-cpp-compiler@master
+     - name: Set up build environment
+       id: setup
+       uses: ./.github/actions/setup-build
        with:
          compiler: ${{ matrix.compiler }}
-     # NOTE: emsdk removed - emcc builds run on host-x64 only (WebAssembly is platform-independent)
-     - name: Set parallel jobs variable
-       run: |
-             echo "PARALLEL=-j$(sysctl -n hw.logicalcpu)" >> "$GITHUB_ENV"
-             echo "BOOT_LINUX_TEST=TMP_FILE=\$(mktemp "$RUNNER_TEMP/tmpfile.XXXXXX"); \
-                                   sudo env TMP_FILE=\${TMP_FILE} .ci/boot-linux-prepare.sh setup; \
-                                   . \${TMP_FILE}; \
-                                   .ci/boot-linux.sh; \
-                                   EXIT_CODE=\$?; \
-                                   sudo env TMP_FILE=\${TMP_FILE} BLK_DEV_EXT4=\${BLK_DEV_EXT4} BLK_DEV_SIMPLEFS=\${BLK_DEV_SIMPLEFS} .ci/boot-linux-prepare.sh cleanup; \
-                                   exit \${EXIT_CODE};" >> "$GITHUB_ENV"
-     - name: Symlink gcc-15 due to the default /usr/local/bin/gcc links to system's clang
-       run: |
-             ln -s /opt/homebrew/opt/gcc/bin/gcc-15 /usr/local/bin/gcc-15
-     - name: Cache build artifacts
-       uses: actions/cache@v5
-       with:
-         path: build/
-         key: rv32emu-artifacts-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('mk/artifact.mk', 'mk/external.mk') }}
-         restore-keys: |
-           rv32emu-artifacts-${{ runner.os }}-${{ runner.arch }}-
-     - name: fetch artifact first to reduce HTTP requests
-       env:
-         CC: ${{ steps.install_cc.outputs.cc }}
-       run: |
-             . .ci/common.sh
-             fetch_artifact ELF
-             fetch_artifact Linux-Image ENABLE_SYSTEM=1
-             rm -f build/.config  # Clean config after ENABLE_SYSTEM=1 to prevent contamination
-             fetch_artifact sail ENABLE_ARCH_TEST=1
-             # get from rv32emu-prebuilt
-             .ci/fetch.sh -o build/shareware_doom_iwad.zip "https://raw.githubusercontent.com/sysprog21/rv32emu-prebuilt/doom-artifact/shareware_doom_iwad.zip"
-             unzip -o -d build/ build/shareware_doom_iwad.zip
-
-     # NOTE: emcc builds removed - they run on host-x64 only since WebAssembly output is platform-independent
+         riscv-toolchain: 'true'
+         artifacts: elf linux-image doom
+         cache-suffix: host-${{ matrix.compiler }}
 
      - name: check + tests
-       if: success()
-       env:
-         CC: ${{ steps.install_cc.outputs.cc }}
        run: |
              make cleanconfig
              make defconfig
@@ -661,93 +368,66 @@ jobs:
              make misalign $PARALLEL
              make tool $PARALLEL
 
-     - name: core extension disable tests (interpreter + JIT)
-       if: success()
-       env:
-         CC: ${{ steps.install_cc.outputs.cc }}
-       run: |
-             set -euo pipefail
-             # Core extensions + bit manipulation + CSR/fence + performance features
-             # Tests both interpreter and JIT modes (12 × 2 = 24 builds)
-             # Consolidated from 25 separate builds (13 interpreter + 12 JIT)
-             # Use cleanconfig instead of distclean to preserve artifacts across iterations
-             for ext in ENABLE_EXT_M ENABLE_EXT_A ENABLE_EXT_F ENABLE_EXT_C \
-                        ENABLE_Zba ENABLE_Zbb ENABLE_Zbc ENABLE_Zbs \
-                        ENABLE_Zicsr ENABLE_Zifencei \
-                        ENABLE_MOP_FUSION ENABLE_BLOCK_CHAINING; do
-               echo "Testing ${ext}=0 (interpreter)"
-               if ! (make cleanconfig && make defconfig && make ${ext}=0 check $PARALLEL); then
-                 echo "ERROR: Interpreter test failed with ${ext}=0"
-                 exit 1
-               fi
-               echo "Testing ${ext}=0 (JIT)"
-               if ! (make cleanconfig && make jit_defconfig && make ${ext}=0 check $PARALLEL); then
-                 echo "ERROR: JIT test failed with ${ext}=0"
-                 exit 1
-               fi
-             done
-
      - name: SDL disable test
-       if: success()
-       env:
-         CC: ${{ steps.install_cc.outputs.cc }}
        run: |
-             # SDL is graphics subsystem, interpreter-only test sufficient
+             # SDL is the graphics subsystem; an interpreter-only test suffices.
              make distclean && make defconfig && make ENABLE_SDL=0 check $PARALLEL
 
      - name: gdbstub test, need RV32 toolchain
-       if: success()
-       env:
-         CC: ${{ steps.install_cc.outputs.cc }}
-       run: |
-             make distclean && make defconfig && make ENABLE_GDBSTUB=1 gdbstub-test $PARALLEL
+       run: make distclean && make defconfig && make ENABLE_GDBSTUB=1 gdbstub-test $PARALLEL
 
      - name: JIT base test
-       if: success()
-       env:
-         CC: ${{ steps.install_cc.outputs.cc }}
-       run: |
-             # Base JIT test (extension disable tests handled in consolidated step above)
-             make distclean && make jit_defconfig && make check $PARALLEL
+       run: make distclean && make jit_defconfig && make check $PARALLEL
 
      - name: undefined behavior test
-       if: (success() || failure()) && steps.install_cc.outputs.cc == 'clang'  # gcc on macOS/arm64 does not support sanitizers
-       env:
-         CC: ${{ steps.install_cc.outputs.cc }}
+       # gcc on macOS/arm64 does not support sanitizers
+       if: (success() || failure()) && matrix.compiler == 'clang'
        run: |
              make distclean && make defconfig && make ENABLE_UBSAN=1 check $PARALLEL
              make distclean && make jit_defconfig && make ENABLE_UBSAN=1 check $PARALLEL
 
      - name: boot Linux kernel test
-       if: success()
-       env:
-         CC: ${{ steps.install_cc.outputs.cc }}
        run: |
-             make distclean && make system_defconfig && make INITRD_SIZE=32 $PARALLEL && \
-             make artifact $PARALLEL
-             bash -c "${BOOT_LINUX_TEST}"
+             make distclean && make system_defconfig && make INITRD_SIZE=32 $PARALLEL && make artifact $PARALLEL
+             .ci/boot-linux-test.sh
              make clean
 
      - name: boot Linux kernel test (JIT)
-       if: success()
        env:
-         CC: ${{ steps.install_cc.outputs.cc }}
          BOOT_TIMEOUT: 120  # JIT under macOS load has flaked at 90s
        run: |
              make distclean && make system_defconfig && make INITRD_SIZE=32 ENABLE_JIT=1 ENABLE_MOP_FUSION=0 $PARALLEL && make artifact $PARALLEL
-             bash -c "${BOOT_LINUX_TEST}"
+             .ci/boot-linux-test.sh
              make clean
 
-     - name: Architecture test
-       if: success()
-       env:
-         CC: ${{ steps.install_cc.outputs.cc }}
-       run: |
-             . .ci/common.sh
-             export LATEST_RELEASE=$(fetch_latest_release sail)
-             python3 -m venv venv
-             . venv/bin/activate
-             .ci/riscv-tests.sh
+  macOS-arm64-feature-disable:
+    name: macOS ${{ matrix.compiler }} feature disable
+    needs: [detect-code-related-file-changes]
+    if: needs.detect-code-related-file-changes.outputs.has_code_related_changes == 'true'
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [gcc-15, clang]
+    runs-on: macos-latest
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+     - uses: actions/checkout@v7
+       with:
+         submodules: 'true'
+
+     - name: Set up build environment
+       id: setup
+       uses: ./.github/actions/setup-build
+       with:
+         compiler: ${{ matrix.compiler }}
+         riscv-toolchain: 'true'
+         artifacts: elf
+         cache-suffix: feature-${{ matrix.compiler }}
+
+     - name: Feature disable tests (interpreter + JIT)
+       run: .ci/test-ext-disable.sh
 
   coding-style:
     needs: [detect-code-related-file-changes]
@@ -755,18 +435,13 @@ jobs:
     timeout-minutes: 15
     runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
+    - name: Install formatters
+      run: .ci/install-formatters.sh
     - name: coding convention
       run: |
-            wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | gpg --dearmor | sudo tee /etc/apt/trusted.gpg.d/apt.llvm.org.gpg >/dev/null
-            echo "deb http://apt.llvm.org/$(lsb_release -cs)/ llvm-toolchain-$(lsb_release -cs)-20 main" | sudo tee /etc/apt/sources.list.d/llvm-20.list
-            sudo apt-get update -q=2
-            sudo apt-get install -q=2 clang-format-20 shfmt python3-pip
-            pip3 install black==25.1.0
-            curl -LSfs https://go.mskelton.dev/dtsfmt/install | sh -s -- -y
             .ci/check-newline.sh
             .ci/check-format.sh
-      shell: bash
 
   static-analysis:
     needs: [detect-code-related-file-changes]
@@ -774,46 +449,23 @@ jobs:
     timeout-minutes: 45
     runs-on: ubuntu-24.04
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v7
       with:
         submodules: 'true'
-    # LLVM static analysis
-    - name: set up scan-build
+
+    # scan-build lives in clang-tools-<N>, and the analyzer resolves the
+    # versioned clang-<N>/scan-build-<N> names from /usr/bin. Those are apt
+    # symlinks outside /usr/lib/llvm-<N>, so the LLVM cache the other jobs use
+    # would restore the tree without the names this job calls: install fresh.
+    - name: Set up scan-build
       run: |
-            set +e  # Disable errexit
-            # Configure apt to tolerate mirror sync failures
-            sudo tee /etc/apt/apt.conf.d/99-ci-reliability > /dev/null << 'EOF'
-            APT::Update::Error-Mode "any";
-            Acquire::IndexTargets::deb::DEP-11::DefaultEnabled "false";
-            Acquire::IndexTargets::deb::DEP-11-icons::DefaultEnabled "false";
-            Acquire::IndexTargets::deb::DEP-11-icons-hidpi::DefaultEnabled "false";
-            Acquire::Retries "3";
-            Acquire::Check-Valid-Until "false";
-            EOF
-            # Update with error tolerance
-            sudo apt-get update -q=2 2>&1
-            UPDATE_EXIT=$?
-            if [ $UPDATE_EXIT -ne 0 ]; then
-              echo "WARNING: apt update exited with code $UPDATE_EXIT, continuing..."
-            fi
-            sudo apt-get install -q=2 curl libsdl2-dev libsdl2-mixer-dev
             LLVM_VERSION=$(cat .ci/llvm-version)
+            .ci/apt-install.sh curl wget lsb-release gnupg libsdl2-dev libsdl2-mixer-dev
             sudo .ci/install-llvm.sh "${LLVM_VERSION}"
-            sudo apt-get install -q=2 clang-${LLVM_VERSION} clang-tools-${LLVM_VERSION}
-            set -e  # Re-enable errexit
-      shell: bash
-    - name: run scan-build without JIT
-      env:
-        LATEST_RELEASE: dummy
-      run: |
-          LLVM_VERSION=$(cat .ci/llvm-version)
-          make distclean && make defconfig && scan-build-${LLVM_VERSION} -v -o ~/scan-build --status-bugs --use-cc=clang-${LLVM_VERSION} --force-analyze-debug-code --show-description -analyzer-config stable-report-filename=true -enable-checker valist,nullability make ENABLE_EXT_F=0 ENABLE_SDL=0 ENABLE_JIT=0
-    - name: run scan-build with JIT
-      env:
-        LATEST_RELEASE: dummy
-      run: |
-          LLVM_VERSION=$(cat .ci/llvm-version)
-          make distclean && make jit_defconfig && scan-build-${LLVM_VERSION} -v -o ~/scan-build --status-bugs --use-cc=clang-${LLVM_VERSION} --force-analyze-debug-code --show-description -analyzer-config stable-report-filename=true -enable-checker valist,nullability make ENABLE_EXT_F=0 ENABLE_SDL=0 ENABLE_JIT=1
+            sudo apt-get install -y -q=2 "clang-${LLVM_VERSION}" "clang-tools-${LLVM_VERSION}"
+
+    - name: Run scan-build
+      run: .ci/scan-build.sh
 
   # https://docs.docker.com/build/ci/github-actions/multi-platform/
   docker-hub-build-and-publish:
@@ -823,29 +475,29 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           submodules: 'true'
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@v4
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
       - name: Login to Docker Hub
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         if: github.event_name == 'push'
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_ACCESS_TOKEN }}
       - name: Get short commit SHA1
         if: github.event_name == 'push'
-        shell: bash
-        run: |
-          echo "short_hash=$(git rev-parse --short "$GITHUB_SHA")" >> "$GITHUB_ENV"
+        run: echo "short_hash=$(git rev-parse --short "$GITHUB_SHA")" >> "$GITHUB_ENV"
       - name: Build and push
         if: github.event_name == 'push'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           push: true
           context: .
           platforms: linux/amd64,linux/arm64/v8
           tags: sysprog21/rv32emu:latest, sysprog21/rv32emu:${{ env.short_hash }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

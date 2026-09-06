@@ -4,6 +4,10 @@
 
 set -u -o pipefail
 
+# Track the same clang-format .ci/install-formatters.sh installs; hardcoding a
+# version here makes the check silently skip itself after an LLVM bump.
+CLANG_FORMAT=clang-format-$(cat "$(dirname "${BASH_SOURCE[0]}")/llvm-version")
+
 # Use git ls-files to exclude submodules and untracked files
 C_SOURCES=()
 while IFS= read -r file; do
@@ -11,12 +15,12 @@ while IFS= read -r file; do
 done < <(git ls-files -- '*.c' '*.cxx' '*.cpp' '*.h' '*.hpp')
 
 if [ ${#C_SOURCES[@]} -gt 0 ]; then
-    if command -v clang-format-20 > /dev/null 2>&1; then
+    if command -v "${CLANG_FORMAT}" > /dev/null 2>&1; then
         echo "Checking C/C++ files..."
-        clang-format-20 -n --Werror "${C_SOURCES[@]}"
+        "${CLANG_FORMAT}" -n --Werror "${C_SOURCES[@]}"
         C_FORMAT_EXIT=$?
     else
-        echo "Skipping C/C++ format check: clang-format-20 not found" >&2
+        echo "Skipping C/C++ format check: ${CLANG_FORMAT} not found" >&2
         C_FORMAT_EXIT=0
     fi
 else

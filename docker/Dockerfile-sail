@@ -14,7 +14,7 @@ RUN opam init --disable-sandboxing -y
 RUN opam switch create ocaml-base-compiler.5.2.0 # opam switch list-available
 RUN opam search sail
 RUN opam install -y sail.0.17.1
-RUN git clone https://github.com/riscv/sail-riscv.git
+RUN git clone https://github.com/riscv/sail-riscv
 RUN cd sail-riscv && \
     git checkout 0e9850fed5bee44346e583f334c6e2a6a25d5cd3 && \
     eval $(opam env) && \

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
-# Reliable download wrapper with retry logic and timeout handling
-# Prefers curl over wget for better error handling and features
+# Reliable download wrapper with retry logic and timeout handling.
+# Prefers curl over wget for better error handling and features.
 
 set -euo pipefail
 
@@ -143,16 +143,17 @@ download()
             print_error "curl binary not found in PATH"
             return 1
         fi
+
         # curl options:
-        # -f: Fail silently on HTTP errors
-        # -L: Follow redirects
-        # -S: Show error even with -s
-        # -s: Silent mode (if quiet)
-        # --retry: Number of retries
-        # --retry-delay: Wait time between retries
-        # --connect-timeout: Connection timeout
-        # --max-time: Total operation timeout
-        # -o: Output file
+        #   -f               Fail silently on HTTP errors
+        #   -L               Follow redirects
+        #   -S               Show error even with -s
+        #   -s               Silent mode (if quiet)
+        #   --retry          Number of retries
+        #   --retry-delay    Wait time between retries
+        #   --connect-timeout Connection timeout
+        #   --max-time       Total operation timeout
+        #   -o               Output file
         local curl_opts=(
             -f
             -L
@@ -177,13 +178,14 @@ download()
             print_error "wget binary not found in PATH"
             return 1
         fi
+
         # wget options:
-        # --retry-connrefused: Retry on connection refused
-        # --waitretry: Wait between retries
-        # --read-timeout: Read timeout
-        # --timeout: Connection timeout
-        # --tries: Number of attempts
-        # -O: Output file
+        #   --retry-connrefused  Retry on connection refused
+        #   --waitretry          Wait between retries
+        #   --read-timeout       Read timeout
+        #   --timeout            Connection timeout
+        #   --tries              Number of attempts
+        #   -O                   Output file
         local wget_opts=(
             --retry-connrefused
             --waitretry="$WAIT_RETRY"

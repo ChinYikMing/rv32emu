@@ -6,16 +6,23 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}-${{ github.event.pull_request.head.sha || github.sha }}
   cancel-in-progress: true
 
+# github-action-benchmark authenticates with RV32EMU_BENCH_TOKEN for both the
+# gh-pages push and the PR comment, so GITHUB_TOKEN needs nothing beyond read.
+# This workflow runs on pull_request_target, where the default write-all token
+# would be in scope for fork-triggered runs.
+permissions:
+  contents: read
+
 jobs:
-  benchmark:
-    name: Performance regression check
+  # Resolved in its own job so the benchmark carries a single condition rather
+  # than repeating it on every step.
+  detect-file-changes:
     if: contains(toJSON(github.event.head_commit.message), 'Merge pull request ') == false
-    timeout-minutes: 30
     runs-on: ubuntu-24.04
+    outputs:
+      has_changed_files: ${{ steps.changed-files.outputs.any_changed }}
     steps:
-      - uses: actions/checkout@v6
-        with:
-          submodules: 'true'
+      - uses: actions/checkout@v7
 
       - name: Test changed files
         id: changed-files
@@ -35,9 +42,19 @@ jobs:
               mk/toolchain.mk
               tools/detect-env.py
 
+  benchmark:
+    name: Performance regression check
+    needs: [detect-file-changes]
+    if: needs.detect-file-changes.outputs.has_changed_files == 'true' || github.event_name == 'workflow_dispatch'
+    timeout-minutes: 30
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: 'true'
+
       - name: Cache benchmark artifacts
-        if: steps.changed-files.outputs.any_changed == 'true' || github.event_name == 'workflow_dispatch'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: build/
           key: benchmark-artifacts-${{ runner.os }}-${{ hashFiles('mk/artifact.mk') }}
@@ -45,26 +62,20 @@ jobs:
             benchmark-artifacts-${{ runner.os }}-
 
       - name: Install dependencies
-        if: steps.changed-files.outputs.any_changed == 'true' || github.event_name == 'workflow_dispatch'
-        run: |
-            sudo pip3 install numpy --break-system-packages
-        shell: bash
+        run: sudo pip3 install numpy --break-system-packages
 
       - name: Build for benchmark
-        if: steps.changed-files.outputs.any_changed == 'true' || github.event_name == 'workflow_dispatch'
         # GH_TOKEN raises the anonymous-API rate limit (60 req/hr) so the
         # parse-time call to fetch-releases-tag stops flaking when the
         # cache misses and several PRs build back-to-back.
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: make defconfig && make ENABLE_SDL=0 all artifact
+
       - name: Run benchmark
-        if: steps.changed-files.outputs.any_changed == 'true' || github.event_name == 'workflow_dispatch'
-        run: |
-          python3 tests/bench.py --json --quiet
+        run: python3 tests/bench.py --json --quiet
 
       - name: Store benchmark results
-        if: steps.changed-files.outputs.any_changed == 'true' || github.event_name == 'workflow_dispatch'
         uses: benchmark-action/github-action-benchmark@v1
         with:
           name: Benchmarks
