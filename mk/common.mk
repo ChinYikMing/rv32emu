@@ -64,12 +64,19 @@ error_msg = $(PRINTF) "$(RED)$(strip $1)$(NC)\n"
 # Targets that don't require .config
 # Note: 'artifact' is included because it only downloads prebuilt binaries
 # and determines what to download from ENABLE_* flags (via compat.mk)
+# cleanconfig belongs here for the same reason as clean and distclean: it
+# deletes .config, so demanding one first is backwards, and it made a fresh
+# clone unable to run it at all.
 CONFIG_TARGETS := config menuconfig defconfig oldconfig savedefconfig \
-                  clean distclean env-check artifact fetch-checksum build-linux-image
+                  clean cleanconfig distclean env-check artifact \
+                  fetch-checksum build-linux-image
 
 # Targets where we can skip expensive dependency detection (pkg-config, llvm-config, etc.)
 # This speeds up 'make clean', etc. significantly
-SKIP_DEPS_TARGETS := clean distclean
+# cleanconfig belongs here for the same reason as clean and distclean: it only
+# deletes files, so probing for pkg-config and llvm-config first is wasted
+# work. The feature-disable matrix calls it 24 times per job.
+SKIP_DEPS_TARGETS := clean cleanconfig distclean
 SKIP_DEPS_CHECK := $(filter $(SKIP_DEPS_TARGETS),$(MAKECMDGOALS))
 
 # Targets that generate .config
