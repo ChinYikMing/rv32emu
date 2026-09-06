@@ -15,6 +15,7 @@ concurrency:
 jobs:
   analyze:
     name: Analyze (c-cpp)
+    timeout-minutes: 45
     runs-on: ubuntu-24.04
     permissions:
       security-events: write
@@ -28,14 +29,12 @@ jobs:
 
     steps:
     - name: Checkout repository
-      uses: actions/checkout@v6
+      uses: actions/checkout@v7
       with:
         submodules: 'true'
 
     - name: Install dependencies
-      run: |
-        sudo apt-get update -q=2
-        sudo apt-get install -q=2 libsdl2-dev libsdl2-mixer-dev
+      run: .ci/apt-install.sh libsdl2-dev libsdl2-mixer-dev
 
     - name: Initialize CodeQL
       uses: github/codeql-action/init@v4
@@ -43,6 +42,9 @@ jobs:
         languages: c-cpp
         build-mode: manual
 
+    # No build cache here on purpose: CodeQL only sees the translation units
+    # that actually compile during this step, so restored objects would shrink
+    # the database instead of speeding it up.
     - name: Build
       run: |
         make defconfig

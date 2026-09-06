@@ -1,0 +1,182 @@
+name: Set up rv32emu build environment
+description: >
+  Install the packages, LLVM and RISC-V toolchain a build job needs, restoring
+  each of them from the actions cache when possible, and fetch the prebuilt
+  artifacts the job asks for.
+
+inputs:
+  compiler:
+    description: Compiler to select through rlalik/setup-cpp-compiler; empty to skip.
+    default: ''
+  cc:
+    description: >
+      Compiler command to export as CC, overriding whatever the compiler input
+      resolved to. Use it to pick a compiler off the LLVM bin directory this
+      action puts on PATH, which setup-cpp-compiler knows nothing about.
+    default: ''
+  llvm:
+    description: >
+      Install LLVM at the version pinned in .ci/llvm-version. Linux only: the
+      macOS dependency set always includes llvm@<version>, because the JIT needs
+      it and separating it there would save nothing. On macOS this input governs
+      only whether its bin directory goes on PATH.
+    default: 'true'
+  riscv-toolchain:
+    description: Install the RISC-V cross toolchain, needed by the gdbstub and architecture tests.
+    default: 'false'
+  artifacts:
+    description: Prebuilt artifacts to fetch, as accepted by .ci/fetch-artifacts.sh.
+    default: ''
+  cache-suffix:
+    description: >
+      Discriminator for the build/ cache key. Jobs that leave different object
+      files behind must not share a key, or whichever finishes first poisons
+      the others.
+    default: 'shared'
+
+outputs:
+  cc:
+    description: >
+      The compiler exported as CC, whether it came from the cc override or from
+      setup-cpp-compiler. Empty when no compiler was requested.
+    value: ${{ steps.export-cc.outputs.cc }}
+  llvm-version:
+    description: LLVM major version pinned in .ci/llvm-version.
+    value: ${{ steps.llvm-version.outputs.version }}
+
+runs:
+  using: composite
+  steps:
+    - name: Read LLVM version
+      id: llvm-version
+      shell: bash
+      run: echo "version=$(cat .ci/llvm-version)" >> "$GITHUB_OUTPUT"
+
+    - name: Install packages (Linux)
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        .ci/apt-install.sh curl wget lsb-release software-properties-common \
+            gnupg libsdl2-dev libsdl2-mixer-dev device-tree-compiler expect \
+            bc p7zip-full e2fsprogs
+
+    # No Homebrew cache on purpose. The cache can only carry the Cellar, not
+    # the opt/ and bin/ symlinks, and "brew install" on a formula it already
+    # finds in the Cellar reports "already installed" without recreating
+    # them. A hit therefore leaves brew --prefix pointing at a path that does
+    # not exist, which is how the boot test lost mkfs.ext4. The equivalent
+    # cache on master keyed off main.yml, so it invalidated on nearly every
+    # change and hid this.
+    - name: Install packages (macOS)
+      if: runner.os == 'macOS'
+      shell: bash
+      run: .ci/brew-install.sh
+
+    - name: Cache LLVM
+      if: runner.os == 'Linux' && inputs.llvm == 'true'
+      id: cache-llvm
+      uses: actions/cache@v6
+      with:
+        path: /usr/lib/llvm-${{ steps.llvm-version.outputs.version }}
+        key: ${{ runner.os }}-${{ runner.arch }}-llvm-${{ steps.llvm-version.outputs.version }}
+
+    - name: Install LLVM
+      if: runner.os == 'Linux' && inputs.llvm == 'true' && steps.cache-llvm.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        # Ubuntu Noble's base repos cap at llvm-18, so the pinned version comes
+        # from apt.llvm.org. install-llvm.sh verifies the signing key against a
+        # pinned fingerprint before touching apt sources.
+        VER='${{ steps.llvm-version.outputs.version }}'
+        sudo .ci/install-llvm.sh "${VER}"
+        sudo apt-get install -y -q=2 \
+            "llvm-${VER}" "llvm-${VER}-dev" "llvm-${VER}-runtime" \
+            "clang-${VER}" "lld-${VER}"
+
+    - name: Set up LLVM PATH
+      if: inputs.llvm == 'true'
+      shell: bash
+      run: |
+        if [ "${RUNNER_OS}" = "macOS" ]; then
+          echo "$(brew --prefix llvm@${{ steps.llvm-version.outputs.version }})/bin" >> "$GITHUB_PATH"
+        else
+          echo "/usr/lib/llvm-${{ steps.llvm-version.outputs.version }}/bin" >> "$GITHUB_PATH"
+        fi
+
+    - name: Cache RISC-V toolchain
+      if: inputs.riscv-toolchain == 'true'
+      id: cache-toolchain
+      uses: actions/cache@v6
+      with:
+        path: ${{ github.workspace }}/toolchain
+        key: ${{ runner.os }}-${{ runner.arch }}-riscv-toolchain-${{ hashFiles('.ci/riscv-toolchain-install.sh') }}
+
+    - name: Install RISC-V toolchain
+      if: inputs.riscv-toolchain == 'true' && steps.cache-toolchain.outputs.cache-hit != 'true'
+      shell: bash
+      run: .ci/riscv-toolchain-install.sh
+
+    - name: Set up RISC-V toolchain PATH
+      if: inputs.riscv-toolchain == 'true'
+      shell: bash
+      run: echo "${{ github.workspace }}/toolchain/bin" >> "$GITHUB_PATH"
+
+    - name: Set up Python
+      if: runner.os == 'macOS'
+      uses: actions/setup-python@v7
+      with:
+        python-version: '3.12'
+
+    - name: Install compiler
+      id: install-cc
+      if: inputs.compiler != ''
+      uses: rlalik/setup-cpp-compiler@v2
+      with:
+        compiler: ${{ inputs.compiler }}
+
+    # The default /usr/local/bin/gcc on the macOS image points at Apple clang,
+    # so the Homebrew GCC has to be reachable under its own name.
+    - name: Link Homebrew GCC
+      if: runner.os == 'macOS' && startsWith(inputs.compiler, 'gcc')
+      shell: bash
+      run: |
+        sudo ln -sf "/opt/homebrew/opt/gcc/bin/${{ inputs.compiler }}" \
+            "/usr/local/bin/${{ inputs.compiler }}"
+
+    - name: Export CC and parallel jobs
+      id: export-cc
+      shell: bash
+      run: |
+        echo "PARALLEL=-j$(getconf _NPROCESSORS_ONLN)" >> "$GITHUB_ENV"
+        SELECTED_CC='${{ inputs.cc }}'
+        [ -n "${SELECTED_CC}" ] || SELECTED_CC='${{ steps.install-cc.outputs.cc }}'
+        # Leave CC unset when no compiler was requested: the WebAssembly build
+        # selects emcc on its own and an empty CC would clobber that.
+        if [ -n "${SELECTED_CC}" ]; then
+          # Fail here rather than in the first make, where a missing compiler
+          # surfaces as an unrelated build error minutes later.
+          command -v "${SELECTED_CC}" > /dev/null \
+            || { echo "ERROR: compiler '${SELECTED_CC}' not found in PATH"; exit 1; }
+          echo "CC=${SELECTED_CC}" >> "$GITHUB_ENV"
+        fi
+        echo "cc=${SELECTED_CC}" >> "$GITHUB_OUTPUT"
+
+    - name: Cache build artifacts
+      if: inputs.artifacts != ''
+      uses: actions/cache@v6
+      with:
+        path: build/
+        key: rv32emu-artifacts-${{ runner.os }}-${{ runner.arch }}-${{ inputs.cache-suffix }}-${{ hashFiles('mk/artifact.mk', 'mk/external.mk') }}
+        # The second fallback lets a cold job start from any sibling's build/.
+        # That is safe only because every job's first make is cleanconfig or
+        # distclean, which deletes the objects before anything links against
+        # them; what survives is the downloaded artifacts, which is the point.
+        # A new job that builds before cleaning would break that invariant.
+        restore-keys: |
+          rv32emu-artifacts-${{ runner.os }}-${{ runner.arch }}-${{ inputs.cache-suffix }}-
+          rv32emu-artifacts-${{ runner.os }}-${{ runner.arch }}-
+
+    - name: Fetch artifacts
+      if: inputs.artifacts != ''
+      shell: bash
+      run: .ci/fetch-artifacts.sh ${{ inputs.artifacts }}

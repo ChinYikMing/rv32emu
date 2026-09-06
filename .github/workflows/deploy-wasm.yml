@@ -7,8 +7,6 @@ on:
     types:
       - closed
   workflow_dispatch:
-    branches:
-      - master
   repository_dispatch:   # listening to rv32emu-prebuilt events
     types: [deploy_user_wasm, deploy_system_wasm]
 
@@ -16,23 +14,26 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false  # Don't cancel deployments
 
+permissions:
+  contents: read
+
 jobs:
-  wasm-system-deploy:
-    if: github.event.pull_request.merged == true ||
-        github.event_name == 'workflow_dispatch' ||
-        github.event_name == 'repository_dispatch' && github.event.action == 'deploy_system_wasm'
+  # Resolve both file sets once, so each deploy job carries a single condition
+  # instead of repeating it on every step.
+  # Only the merge path needs a file diff. On workflow_dispatch and
+  # repository_dispatch there is no base commit to diff against, and
+  # changed-files errors out; those events deploy unconditionally anyway.
+  detect-file-changes:
+    if: github.event_name == 'pull_request_target'
     runs-on: ubuntu-24.04
+    outputs:
+      system: ${{ steps.system.outputs.any_modified }}
+      user: ${{ steps.user.outputs.any_modified }}
     steps:
       - name: Check out the repo
-        uses: actions/checkout@v6
-        with:
-          submodules: 'true'
-      - name: install-dependencies
-        run: |
-              sudo apt-get update -q=2
-              sudo apt-get install -q=2 curl device-tree-compiler
-      - name: Verify if the JS or HTML files has been modified
-        id: changed-files
+        uses: actions/checkout@v7
+      - name: Verify if the system emulation files have been modified
+        id: system
         uses: tj-actions/changed-files@v47
         with:
           files: |
@@ -44,6 +45,10 @@ jobs:
               mk/wasm.mk
               configs/wasm_defconfig
               tools/detect-env.py
+              # Helper scripts the deploy job runs
+              .ci/wasm-build.sh
+              .ci/fetch-artifacts.sh
+              .ci/emsdk-warm-cache.sh
               # rootfs overlay tooling (S99automount auto-mounts /dev/vda)
               tools/cpio-inject.py
               tools/rootfs-automount.sh
@@ -55,160 +60,8 @@ jobs:
               src/emulate.c
               src/rv32_template.c
               src/rv32_constopt.c
-      - name: install emcc
-        if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
-            github.event_name == 'workflow_dispatch' ||
-            (github.event_name == 'repository_dispatch' && github.event.action == 'deploy_system_wasm') }}
-        run: |
-            git clone https://github.com/emscripten-core/emsdk -b 3.1.51
-            cd emsdk
-            # Pin to the same version as the emsdk tag. `install latest`
-            # would otherwise drift; newer Emscripten releases tightened the
-            # port-cache lock and broke `make -j` builds here.
-            ./emsdk install 3.1.51
-            ./emsdk activate 3.1.51
-            source ./emsdk_env.sh
-            # Propagate emsdk env to subsequent steps (each `run:` is a fresh
-            # shell). One dir per line per GitHub Actions docs; non-PATH vars
-            # (EM_CONFIG, EMSDK_NODE) ensure emcc finds its .emscripten config
-            # and bundled node without relying on relative-path auto-discovery.
-            #
-            # Only propagate values that are set and non-empty: emsdk
-            # 3.1.51's emsdk_env.sh does not export EM_CONFIG / EMSDK_PYTHON.
-            # Writing them empty to $GITHUB_ENV would override emcc's
-            # $HOME/.emscripten fallback with "", which emcc resolves to '.'
-            # and reports as "config file not found".
-            for var in EMSDK EM_CONFIG EMSDK_NODE EMSDK_PYTHON; do
-              val="${!var}"
-              [ -n "$val" ] && printf '%s=%s\n' "$var" "$val" >> "$GITHUB_ENV"
-            done
-            {
-              echo "$EMSDK"
-              echo "$EMSDK/upstream/emscripten"
-            } >> $GITHUB_PATH
-        shell: bash
-      - name: fetch artifact
-        if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
-            github.event_name == 'workflow_dispatch' ||
-            (github.event_name == 'repository_dispatch' && github.event.action == 'deploy_system_wasm') }}
-        # GH_TOKEN authenticates the parse-time fetch-releases-tag call in
-        # mk/artifact.mk so the GitHub API request escapes the 60 req/hr
-        # anonymous (IP-shared) limit and stops flaking when several
-        # merges land back-to-back.
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-              make artifact ENABLE_SYSTEM=1
-      # Populate the SDL2 / SDL2_mixer port cache serially. Without this,
-      # concurrent first-time port generation under `make -j` trips
-      # emscripten's nested-lock assertion on libSDL2.a. The link-time
-      # warmup alone is not enough on emsdk 3.1.51: building sdl2_mixer
-      # spawns one emcc -c subprocess per .c file with -sUSE_SDL=2, each
-      # of which tries to build the sdl2 port while the parent emcc still
-      # holds the cache lock and has exported EM_CACHE_IS_LOCKED=1 into
-      # the subprocess environment, tripping cache.py's assertion. Run
-      # embuilder up front to put sdl2 (and the -pthread/-mt variants) in
-      # the cache so those subprocess port lookups are hits.
-      - name: warm emscripten port cache
-        if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
-            github.event_name == 'workflow_dispatch' ||
-            (github.event_name == 'repository_dispatch' && github.event.action == 'deploy_system_wasm') }}
-        run: |
-            embuilder build sdl2 sdl2-mt libmimalloc libmimalloc-mt
-            echo 'int main(void){return 0;}' > /tmp/warmup.c
-            # Link (not just compile) so sysroot libraries that materialize at
-            # link time (e.g. libmimalloc) are populated too.
-            emcc -sSTRICT=0 -sUSE_SDL=2 -sUSE_SDL_MIXER=2 \
-                 -sSDL2_MIXER_FORMATS=wav,mid -sMALLOC=mimalloc -pthread \
-                 -O2 /tmp/warmup.c -o /tmp/warmup.js
-      # Note: wasm_defconfig sets CONFIG_BUILD_WASM=y which auto-selects CC=emcc
-      - name: build with emcc and move application files to /tmp
-        if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
-            github.event_name == 'workflow_dispatch' ||
-            (github.event_name == 'repository_dispatch' && github.event.action == 'deploy_system_wasm') }}
-        run: |
-            make wasm_defconfig
-            make ENABLE_SYSTEM=1 ENABLE_GOLDFISH_RTC=1 -j
-            make assets/wasm/vendor/xterm.min.js assets/wasm/vendor/xterm.min.css
-            # Build the rootfs overlay (S99automount) and concatenate it with
-            # the upstream rootfs.cpio so the guest mounts /dev/vda at boot.
-            make build/linux-image/rootfs.web.cpio ENABLE_SYSTEM=1
-            mkdir /tmp/rv32emu-system-demo
-            cp assets/wasm/html/system.html /tmp/rv32emu-system-demo/index.html
-            cp assets/wasm/js/coi-serviceworker.min.js /tmp/rv32emu-system-demo/
-            cp assets/wasm/vendor/xterm.min.js /tmp/rv32emu-system-demo/
-            cp assets/wasm/vendor/xterm.min.css /tmp/rv32emu-system-demo/
-            cp build/rv32emu.js /tmp/rv32emu-system-demo/
-            cp build/rv32emu.wasm /tmp/rv32emu-system-demo/
-            cp build/rv32emu.worker.js /tmp/rv32emu-system-demo/ || true
-            cp build/linux-image/Image /tmp/rv32emu-system-demo/
-            # Ship the extended rootfs (with S99automount) as rootfs.cpio
-            cp build/linux-image/rootfs.web.cpio /tmp/rv32emu-system-demo/rootfs.cpio
-            ls -al /tmp/rv32emu-system-demo
-      - name: Check out the rv32emu-system-demo repo
-        if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
-            github.event_name == 'workflow_dispatch' ||
-            (github.event_name == 'repository_dispatch' && github.event.action == 'deploy_system_wasm') }}
-        uses: actions/checkout@v6
-        with:
-          persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
-          repository: sysprog21/rv32emu-demo
-      - name: Create local changes
-        if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
-            github.event_name == 'workflow_dispatch' ||
-            (github.event_name == 'repository_dispatch' && github.event.action == 'deploy_system_wasm') }}
-        run: |
-            mkdir -p system
-            mv /tmp/rv32emu-system-demo/index.html ./system
-            mv /tmp/rv32emu-system-demo/coi-serviceworker.min.js ./system
-            mv /tmp/rv32emu-system-demo/xterm.min.js ./system
-            mv /tmp/rv32emu-system-demo/xterm.min.css ./system
-            mv /tmp/rv32emu-system-demo/rv32emu.js ./system
-            mv /tmp/rv32emu-system-demo/rv32emu.wasm ./system
-            mv /tmp/rv32emu-system-demo/rv32emu.worker.js ./system || true
-            mv /tmp/rv32emu-system-demo/Image ./system
-            mv /tmp/rv32emu-system-demo/rootfs.cpio ./system
-      - name: Commit files
-        id: commit
-        if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
-            github.event_name == 'workflow_dispatch' ||
-            (github.event_name == 'repository_dispatch' && github.event.action == 'deploy_system_wasm') }}
-        run: |
-            git config --local user.email "github-actions[bot]@users.noreply.github.com"
-            git config --local user.name "github-actions[bot]"
-            git add system/
-            if git diff --cached --quiet; then
-              echo "committed=false" >> $GITHUB_OUTPUT
-            else
-              git commit -m "Add changes to system emulation"
-              echo "committed=true" >> $GITHUB_OUTPUT
-            fi
-      - name: Push changes
-        if: steps.commit.outputs.committed == 'true'
-        uses: ad-m/github-push-action@master
-        with:
-          repository: sysprog21/rv32emu-demo
-          github_token: ${{ secrets.RV32EMU_DEMO_TOKEN }}
-          branch: main
-  wasm-user-deploy:
-    needs: wasm-system-deploy # run jobs sequentially since two jobs operate on same repository: rv32emu-demo
-    if: |
-      !cancelled() && (
-        needs.wasm-system-deploy.result == 'success' ||
-        (needs.wasm-system-deploy.result == 'skipped' && github.event_name == 'repository_dispatch' && github.event.action == 'deploy_user_wasm')
-      )
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Check out the repo
-        uses: actions/checkout@v6
-        with:
-          submodules: 'true'
-      - name: install-dependencies
-        run: |
-              sudo apt-get update -q=2
-              sudo apt-get install -q=2 curl device-tree-compiler
-      - name: Verify if the JS or HTML or ELF executable files has been modified
-        id: changed-files
+      - name: Verify if the user emulation files have been modified
+        id: user
         uses: tj-actions/changed-files@v47
         with:
           files: |
@@ -224,148 +77,136 @@ jobs:
               mk/wasm.mk
               configs/wasm_defconfig
               tools/detect-env.py
+              # Helper scripts the deploy job runs
+              .ci/wasm-build.sh
+              .ci/fetch-artifacts.sh
+              .ci/emsdk-warm-cache.sh
               # Files below may have a potential performance impact (reference from benchmark.yml)
               src/riscv.c
               src/decode.c
               src/emulate.c
               src/rv32_template.c
               src/rv32_constopt.c
-      - name: install emcc
-        if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
-            github.event_name == 'workflow_dispatch' ||
-            (github.event_name == 'repository_dispatch' && github.event.action == 'deploy_user_wasm') }}
-        run: |
-            git clone https://github.com/emscripten-core/emsdk -b 3.1.51
-            cd emsdk
-            # Pin to the same version as the emsdk tag. `install latest`
-            # would otherwise drift; newer Emscripten releases tightened the
-            # port-cache lock and broke `make -j` builds here.
-            ./emsdk install 3.1.51
-            ./emsdk activate 3.1.51
-            source ./emsdk_env.sh
-            # Propagate emsdk env to subsequent steps (each `run:` is a fresh
-            # shell). One dir per line per GitHub Actions docs; non-PATH vars
-            # (EM_CONFIG, EMSDK_NODE) ensure emcc finds its .emscripten config
-            # and bundled node without relying on relative-path auto-discovery.
-            #
-            # Only propagate values that are set and non-empty: emsdk
-            # 3.1.51's emsdk_env.sh does not export EM_CONFIG / EMSDK_PYTHON.
-            # Writing them empty to $GITHUB_ENV would override emcc's
-            # $HOME/.emscripten fallback with "", which emcc resolves to '.'
-            # and reports as "config file not found".
-            for var in EMSDK EM_CONFIG EMSDK_NODE EMSDK_PYTHON; do
-              val="${!var}"
-              [ -n "$val" ] && printf '%s=%s\n' "$var" "$val" >> "$GITHUB_ENV"
-            done
-            {
-              echo "$EMSDK"
-              echo "$EMSDK/upstream/emscripten"
-            } >> $GITHUB_PATH
-        shell: bash
-      - name: fetch artifact
-        if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
-            github.event_name == 'workflow_dispatch' ||
-            (github.event_name == 'repository_dispatch' && github.event.action == 'deploy_user_wasm') }}
-        # GH_TOKEN authenticates the parse-time fetch-releases-tag call in
-        # mk/artifact.mk so the GitHub API request escapes the 60 req/hr
-        # anonymous (IP-shared) limit and stops flaking when several
-        # merges land back-to-back.
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-              make artifact
-              # get from rv32emu-prebuilt
-              .ci/fetch.sh -o build/shareware_doom_iwad.zip "https://raw.githubusercontent.com/sysprog21/rv32emu-prebuilt/doom-artifact/shareware_doom_iwad.zip"
-              unzip -o -d build/ build/shareware_doom_iwad.zip
-      # Populate the SDL2 / SDL2_mixer port cache serially. Without this,
-      # concurrent first-time port generation under `make -j` trips
-      # emscripten's nested-lock assertion on libSDL2.a. See the matching
-      # comment on the system-deploy warmup step for the root-cause
-      # explanation; embuilder seeds the sdl2 / sdl2-mt / mimalloc cache
-      # entries so per-file sdl2_mixer compile subprocesses don't try to
-      # re-acquire the cache lock the parent emcc already holds.
-      - name: warm emscripten port cache
-        if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
-            github.event_name == 'workflow_dispatch' ||
-            (github.event_name == 'repository_dispatch' && github.event.action == 'deploy_user_wasm') }}
-        run: |
-            embuilder build sdl2 sdl2-mt libmimalloc libmimalloc-mt
-            echo 'int main(void){return 0;}' > /tmp/warmup.c
-            # Link (not just compile) so sysroot libraries that materialize at
-            # link time (e.g. libmimalloc) are populated too.
-            emcc -sSTRICT=0 -sUSE_SDL=2 -sUSE_SDL_MIXER=2 \
-                 -sSDL2_MIXER_FORMATS=wav,mid -sMALLOC=mimalloc -pthread \
-                 -O2 /tmp/warmup.c -o /tmp/warmup.js
-      # Note: wasm_defconfig sets CONFIG_BUILD_WASM=y which auto-selects CC=emcc
-      - name: build with emcc and move application files to /tmp
-        if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
-            github.event_name == 'workflow_dispatch' ||
-            (github.event_name == 'repository_dispatch' && github.event.action == 'deploy_user_wasm') }}
-        run: |
-            make wasm_defconfig
-            make -j
-            make assets/wasm/vendor/xterm.min.js assets/wasm/vendor/xterm.min.css
-            # Bundle the timidity instrument set once as tar and once as
-            # tar.gz. Browsers with DecompressionStream use the smaller gzip
-            # payload; older Safari/Firefox fall back to the plain tar.
-            tar -cf build/timidity.tar -C build/timidity .
-            gzip -9 -c build/timidity.tar > build/timidity.tar.gz
-            mkdir /tmp/rv32emu-demo
-            # Landing page goes to the repo root; user-mode assets to /user/
-            cp assets/wasm/html/demo-index.html /tmp/rv32emu-demo/landing.html
-            cp assets/wasm/html/user.html /tmp/rv32emu-demo/index.html
-            cp assets/wasm/js/coi-serviceworker.min.js /tmp/rv32emu-demo/
-            cp assets/wasm/vendor/xterm.min.js /tmp/rv32emu-demo/
-            cp assets/wasm/vendor/xterm.min.css /tmp/rv32emu-demo/
-            cp build/elf_list.js /tmp/rv32emu-demo/
-            cp build/rv32emu.js /tmp/rv32emu-demo/
-            cp build/rv32emu.wasm /tmp/rv32emu-demo/
-            cp build/rv32emu.worker.js /tmp/rv32emu-demo/ || true
-            # Large game-data assets fetched on demand by user.html
-            cp build/DOOM1.WAD /tmp/rv32emu-demo/
-            cp build/id1/pak0.pak /tmp/rv32emu-demo/
-            cp build/timidity.tar /tmp/rv32emu-demo/
-            cp build/timidity.tar.gz /tmp/rv32emu-demo/
-            ls -al /tmp/rv32emu-demo
+
+  wasm-system-deploy:
+    needs: [detect-file-changes]
+    # !cancelled() keeps this reachable when detect-file-changes is skipped (a
+    # dispatch event) or fails. Without a status function the default rule
+    # skips every dependent job, which would silently cancel a deploy that was
+    # asked for explicitly.
+    if: >
+      !cancelled() && (
+        (github.event.pull_request.merged == true && needs.detect-file-changes.outputs.system == 'true') ||
+        github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'repository_dispatch' && github.event.action == 'deploy_system_wasm')
+      )
+    timeout-minutes: 60
+    runs-on: ubuntu-24.04
+    # GH_TOKEN authenticates the parse-time fetch-releases-tag call in
+    # mk/artifact.mk so the GitHub API request escapes the 60 req/hr
+    # anonymous (IP-shared) limit and stops flaking when several merges land
+    # back-to-back.
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v7
+        with:
+          submodules: 'true'
+      - name: Install dependencies
+        run: .ci/apt-install.sh curl device-tree-compiler
+      # Pinned to the emsdk tag: newer Emscripten releases tightened the
+      # port-cache lock and broke "make -j" builds here.
+      - name: Set up emsdk
+        uses: mymindstorm/setup-emsdk@v16
+        with:
+          version: 3.1.51
+          actions-cache-folder: 'emsdk-cache'
+      - name: Fetch artifact
+        run: .ci/fetch-artifacts.sh linux-image
+      - name: Warm emscripten port cache
+        run: .ci/emsdk-warm-cache.sh
+      - name: Build system emulation demo
+        run: .ci/wasm-build.sh system
       - name: Check out the rv32emu-demo repo
-        if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
-            github.event_name == 'workflow_dispatch' ||
-            (github.event_name == 'repository_dispatch' && github.event.action == 'deploy_user_wasm') }}
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
           repository: sysprog21/rv32emu-demo
       - name: Create local changes
-        if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
-            github.event_name == 'workflow_dispatch' ||
-            (github.event_name == 'repository_dispatch' && github.event.action == 'deploy_user_wasm') }}
         run: |
-            # Migration: previous deploys placed user-mode assets at the repo
-            # root. Remove those stale files so the unified layout (landing
-            # page at /, user mode at /user/, system mode at /system/) is
-            # consistent. Use -f so the step is idempotent on subsequent runs.
+            mkdir -p system
+            mv /tmp/rv32emu-system-demo/* ./system/
+      - name: Commit files
+        id: commit
+        run: |
+            git config --local user.email "github-actions[bot]@users.noreply.github.com"
+            git config --local user.name "github-actions[bot]"
+            git add system/
+            if git diff --cached --quiet; then
+              echo "committed=false" >> $GITHUB_OUTPUT
+            else
+              git commit -m "Add changes to system emulation"
+              echo "committed=true" >> $GITHUB_OUTPUT
+            fi
+      - name: Push changes
+        if: steps.commit.outputs.committed == 'true'
+        uses: ad-m/github-push-action@v1.3.0
+        with:
+          repository: sysprog21/rv32emu-demo
+          github_token: ${{ secrets.RV32EMU_DEMO_TOKEN }}
+          branch: main
+
+  wasm-user-deploy:
+    # Sequential with the system job: both push to the same demo repository.
+    # "skipped" is not a failure here, a merge may touch only one of the two.
+    needs: [detect-file-changes, wasm-system-deploy]
+    if: >
+      !cancelled() && needs.wasm-system-deploy.result != 'failure' && (
+        (github.event.pull_request.merged == true && needs.detect-file-changes.outputs.user == 'true') ||
+        github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'repository_dispatch' && github.event.action == 'deploy_user_wasm')
+      )
+    timeout-minutes: 60
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v7
+        with:
+          submodules: 'true'
+      - name: Install dependencies
+        run: .ci/apt-install.sh curl device-tree-compiler
+      - name: Set up emsdk
+        uses: mymindstorm/setup-emsdk@v16
+        with:
+          version: 3.1.51
+          actions-cache-folder: 'emsdk-cache'
+      - name: Fetch artifact
+        run: .ci/fetch-artifacts.sh elf doom
+      - name: Warm emscripten port cache
+        run: .ci/emsdk-warm-cache.sh
+      - name: Build user emulation demo
+        run: .ci/wasm-build.sh user
+      - name: Check out the rv32emu-demo repo
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false # otherwise, the token used is the GITHUB_TOKEN, instead of your personal access token.
+          repository: sysprog21/rv32emu-demo
+      - name: Create local changes
+        run: |
+            # Migration: earlier deploys placed user-mode assets at the repo
+            # root. Drop the stale copies so the layout stays consistent
+            # (landing page at /, user mode at /user/, system at /system/).
             rm -f navigation.html coi-serviceworker.min.js xterm.min.js \
                   xterm.min.css elf_list.js rv32emu.js rv32emu.wasm \
                   rv32emu.worker.js
             mkdir -p user
             mv /tmp/rv32emu-demo/landing.html ./index.html
-            mv /tmp/rv32emu-demo/index.html ./user/
-            mv /tmp/rv32emu-demo/coi-serviceworker.min.js ./user/
-            mv /tmp/rv32emu-demo/xterm.min.js ./user/
-            mv /tmp/rv32emu-demo/xterm.min.css ./user/
-            mv /tmp/rv32emu-demo/elf_list.js ./user/
-            mv /tmp/rv32emu-demo/rv32emu.js ./user/
-            mv /tmp/rv32emu-demo/rv32emu.wasm ./user/
-            mv /tmp/rv32emu-demo/rv32emu.worker.js ./user/ || true
-            mv /tmp/rv32emu-demo/DOOM1.WAD ./user/
-            mv /tmp/rv32emu-demo/pak0.pak ./user/
-            mv /tmp/rv32emu-demo/timidity.tar ./user/
-            mv /tmp/rv32emu-demo/timidity.tar.gz ./user/
+            mv /tmp/rv32emu-demo/* ./user/
       - name: Commit files
         id: commit
-        if: ${{ steps.changed-files.outputs.any_modified == 'true' ||
-            github.event_name == 'workflow_dispatch' ||
-            (github.event_name == 'repository_dispatch' && github.event.action == 'deploy_user_wasm') }}
         run: |
             git config --local user.email "github-actions[bot]@users.noreply.github.com"
             git config --local user.name "github-actions[bot]"
@@ -378,7 +219,7 @@ jobs:
             fi
       - name: Push changes
         if: steps.commit.outputs.committed == 'true'
-        uses: ad-m/github-push-action@master
+        uses: ad-m/github-push-action@v1.3.0
         with:
           repository: sysprog21/rv32emu-demo
           github_token: ${{ secrets.RV32EMU_DEMO_TOKEN }}

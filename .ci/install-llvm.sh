@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
-#
 # Install LLVM <major> from apt.llvm.org with GPG fingerprint pinning.
 #
 # Replaces the pattern of fetching upstream's llvm.sh and sudo-executing it
-# without verification, which is a supply-chain risk: a hostile mirror or
-# DNS hijack could ship anything to the runner and run it as root.
+# without verification, which is a supply-chain risk: a hostile mirror or DNS
+# hijack could ship anything to the runner and run it as root.
 #
 # What this script does (mirrors the relevant parts of llvm.sh):
 #   1. Download the apt.llvm.org signing key.
@@ -20,8 +19,8 @@
 # Example:
 #   sudo .ci/install-llvm.sh 20
 #
-# Afterwards the caller is expected to `apt-get install` the specific
-# llvm-<N>* / clang-<N> / lld-<N> packages it needs.
+# Afterwards the caller is expected to `apt-get install` the specific llvm-<N>*
+# / clang-<N> / lld-<N> packages it needs.
 
 set -euo pipefail
 
@@ -41,9 +40,9 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 2
 fi
 
-# Pinned fingerprint for the apt.llvm.org signing key.
-# Published by the LLVM project; rotating this requires a deliberate edit.
-# Verify against https://apt.llvm.org/llvm-snapshot.gpg.key (no spaces).
+# Pinned fingerprint for the apt.llvm.org signing key. Published by the LLVM
+# project; rotating this requires a deliberate edit. Verify against
+# https://apt.llvm.org/llvm-snapshot.gpg.key (no spaces).
 LLVM_APT_FINGERPRINT='6084F3CF814B57C1CF12EFD515CF4D18AF4F7421'
 
 KEY_URL='https://apt.llvm.org/llvm-snapshot.gpg.key'
@@ -60,8 +59,8 @@ else
     exit 1
 fi
 
-# Convert the ASCII-armored key to a dearmored keyring so apt can use it,
-# and extract the fingerprint for verification.
+# Convert the ASCII-armored key to a dearmored keyring so apt can use it, and
+# extract the fingerprint for verification.
 gpg --dearmor < "${WORK_DIR}/llvm.key" > "${WORK_DIR}/llvm.gpg"
 
 ACTUAL_FINGERPRINT=$(gpg --with-colons --import-options show-only --import \
@@ -82,12 +81,12 @@ if [ "${ACTUAL_FINGERPRINT}" != "${LLVM_APT_FINGERPRINT}" ]; then
 fi
 echo "Fingerprint OK: ${ACTUAL_FINGERPRINT}"
 
-# Install the verified key under /usr/share/keyrings and bind it to the
-# LLVM repo only via `signed-by=`. Putting it in /etc/apt/trusted.gpg.d
-# would let this key validate ANY apt source claiming to be signed by
-# the same fingerprint (e.g. a hostile mirror serving spoofed packages
-# under an unrelated suite); scoping the trust to llvm-${VER}.list makes
-# that misuse impossible without a second apt source explicitly opting in.
+# Install the verified key under /usr/share/keyrings and bind it to the LLVM
+# repo only via `signed-by=`. Putting it in /etc/apt/trusted.gpg.d would let
+# this key validate ANY apt source claiming to be signed by the same fingerprint
+# (e.g. a hostile mirror serving spoofed packages under an unrelated suite);
+# scoping the trust to llvm-${VER}.list makes that misuse impossible without a
+# second apt source explicitly opting in.
 install -d -m 0755 /usr/share/keyrings
 KEYRING=/usr/share/keyrings/apt.llvm.org.gpg
 install -m 0644 "${WORK_DIR}/llvm.gpg" "${KEYRING}"

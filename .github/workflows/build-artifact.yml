@@ -10,12 +10,17 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   detect-file-change:
     runs-on: ubuntu-24.04
+    outputs:
+      has_changed_files: ${{ steps.test-file-change.outputs.any_modified }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           submodules: 'true'
       - name: Test file change
@@ -36,32 +41,29 @@ jobs:
             tests/quake/**
             tests/scimark2/**
             tests/*.c
-      - name: Set alias
-        id: has_changed_files
-        run: |
-          if [[ ${{ steps.test-file-change.outputs.any_modified }} == true ]]; then
-            echo "has_changed_files=true" >> $GITHUB_OUTPUT
-          else
-            echo "has_changed_files=false" >> $GITHUB_OUTPUT
-          fi
-    outputs:
-      has_changed_files: ${{ steps.has_changed_files.outputs.has_changed_files }}
 
   build-artifact:
     needs: [detect-file-change]
     if: ${{ needs.detect-file-change.outputs.has_changed_files == 'true' || github.event_name == 'workflow_dispatch' }}
+    timeout-minutes: 60
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           submodules: 'true'
+      - name: Cache RISC-V toolchain
+        id: cache-toolchain
+        uses: actions/cache@v6
+        with:
+          path: ${{ github.workspace }}/toolchain
+          key: ${{ runner.os }}-${{ runner.arch }}-riscv-toolchain-${{ hashFiles('.ci/riscv-toolchain-install.sh') }}
       - name: Install dependencies
         run: |
-          sudo apt-get update -q=2
-          sudo apt-get upgrade -q=2
-          sudo apt-get install -q=2 gcc-multilib g++-multilib scons
-          .ci/riscv-toolchain-install.sh
+          .ci/apt-install.sh gcc-multilib g++-multilib scons
+          if [ "${{ steps.cache-toolchain.outputs.cache-hit }}" != "true" ]; then
+            .ci/riscv-toolchain-install.sh
+          fi
           echo "$PWD/toolchain/bin" >> $GITHUB_PATH
       - name: Build binaries
         run: |
@@ -72,20 +74,11 @@ jobs:
           mv build/sha1sum-riscv32 /tmp
           mv build/linux-x86-softfp build/riscv32 /tmp/rv32emu-prebuilt
       - name: Create tarball
-        run: |
-          cd /tmp
-          tar -zcvf rv32emu-prebuilt.tar.gz rv32emu-prebuilt
+        run: tar -zcf /tmp/rv32emu-prebuilt.tar.gz -C /tmp rv32emu-prebuilt
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.RV32EMU_PREBUILT_TOKEN }}
+        working-directory: /tmp
         run: |
-          RELEASE_TAG="$(date +'%Y.%m.%d')-$(git rev-parse --short HEAD)-ELF"
-          cd /tmp
-          gh release create --latest=false $RELEASE_TAG \
-            --repo sysprog21/rv32emu-prebuilt \
-            --title "$RELEASE_TAG"
-          gh release upload $RELEASE_TAG \
-            rv32emu-prebuilt.tar.gz \
-            sha1sum-linux-x86-softfp \
-            sha1sum-riscv32 \
-            --repo sysprog21/rv32emu-prebuilt
+          ${{ github.workspace }}/.ci/publish-prebuilt.sh ELF \
+            rv32emu-prebuilt.tar.gz sha1sum-linux-x86-softfp sha1sum-riscv32

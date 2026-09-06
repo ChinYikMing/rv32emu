@@ -1,4 +1,6 @@
-# Bash strict mode (enabled only when executed directly, not sourced)
+# shellcheck shell=bash
+# Sourced, not executed: no shebang on purpose. Bash strict mode (enabled only
+# when executed directly, not sourced)
 if ! (return 0 2> /dev/null); then
     set -euo pipefail
 fi
@@ -156,13 +158,13 @@ download_with_headers()
             for header in "$@"; do
                 headers+=(-H "$header")
             done
-            curl -fS --retry 5 --retry-delay 2 --retry-max-time 60 -sL "${headers[@]}" "$url"
+            curl -fS --retry 5 --retry-delay 2 --retry-max-time 60 -sL ${headers[@]+"${headers[@]}"} "$url"
             ;;
         wget)
             for header in "$@"; do
                 headers+=(--header="$header")
             done
-            wget -qO- "${headers[@]}" "$url"
+            wget -qO- ${headers[@]+"${headers[@]}"} "$url"
             ;;
     esac
 }
@@ -252,7 +254,8 @@ fetch_latest_release()
 
     # Use C-style loop (Bash builtin) instead of 'seq' for portability
     for ((attempt = 1; attempt <= max_retries; attempt++)); do
-        # Fetch releases with optional authentication
+
+        # Fetch releases with optional authentication.
         # Capture stdout only; let stderr pass through to console for debugging
         if [ -n "${GH_TOKEN:-}" ]; then
             api_response=$(download_with_headers "$api_url" "Authorization: Bearer ${GH_TOKEN}") || download_status=$?
@@ -290,9 +293,8 @@ fetch_latest_release()
     return 1
 }
 
-# Fetch and build artifact with automatic release tag resolution
-# Usage: fetch_artifact <artifact_type> [make_options...]
-# Arguments:
+# Fetch and build artifact with automatic release tag resolution Usage:
+# fetch_artifact <artifact_type> [make_options...] Arguments:
 #   artifact_type: One of "ELF", "Linux-Image", or "sail"
 #   make_options: Additional options to pass to make (e.g., ENABLE_SYSTEM=1)
 # Environment:
@@ -318,7 +320,11 @@ fetch_artifact()
     # Use C-style loop (Bash builtin) instead of 'seq' for portability
     for ((attempt = 1; attempt <= max_retries; attempt++)); do
         echo "Fetching $artifact_type artifact (release: $release_tag, attempt $attempt/$max_retries)..." >&2
-        if make LATEST_RELEASE="$release_tag" "${make_opts[@]}" artifact; then
+        # ${a[@]+"${a[@]}"} rather than "${a[@]}": macOS ships bash 3.2, where
+        # expanding an empty array under `set -u` is a fatal "unbound variable"
+        # rather than the empty expansion bash 4.4+ gives. Callers that pass no
+        # make options (fetch_artifact ELF) would otherwise abort here.
+        if make LATEST_RELEASE="$release_tag" ${make_opts[@]+"${make_opts[@]}"} artifact; then
             return 0
         fi
 
@@ -332,8 +338,8 @@ fetch_artifact()
     return 1
 }
 
-# Common test configuration variables
-# Allow timeout override for JIT tests (JIT compilation adds significant overhead)
+# Common test configuration variables Allow timeout override for JIT tests (JIT
+# compilation adds significant overhead)
 TIMEOUT=${BOOT_TIMEOUT:-50}
 
 # Color codes for test output (bold variants)
