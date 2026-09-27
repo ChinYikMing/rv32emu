@@ -3679,6 +3679,15 @@ retranslate:
 }
 
 #if RV32_HAS(SYSTEM)
+
+#if RV32_HAS(SYSTEM_MMIO)
+/*
+ * The flag to indicate if external interrupt arrives during the trap
+ * after local_irq_enable() set the SIE = 1
+ */
+static bool has_external_intr = false;
+#endif /* SYSTEM_MMIO */
+
 static void __trap_handler(riscv_t *rv)
 {
     rv_insn_t *ir = mpool_calloc(rv->block_ir_mp);
@@ -3687,6 +3696,9 @@ static void __trap_handler(riscv_t *rv)
     /* set to false by sret implementation */
     while (rv->is_trapped && !rv_has_halted(rv)) {
         uint32_t insn;
+#if RV32_HAS(SYSTEM_MMIO)
+    trap:
+#endif
     retry_fetch:
         insn = rv->io.mem_ifetch(rv, rv->PC);
 
@@ -3714,7 +3726,53 @@ static void __trap_handler(riscv_t *rv)
         ir->impl = dispatch_table[ir->opcode];
         rv->compressed = is_compressed(insn);
         ir->impl(rv, ir, rv->csr_cycle, rv->PC);
+
+#if RV32_HAS(SYSTEM_MMIO)
+        /*
+         * local_enable_irq() might happens during the trap handling,
+         * for example, userspace store page fault occurs when writing to the
+         * disk and need to wait for the disk interrupt.
+         *
+         * Thus, need to check if any interrups occur when SIE = 1, handle them
+         * in the middle of the __trap_handler() and before the sret instruction
+         */
+        if (rv_has_plic_trap(rv) && ilog2(rv->csr_sip & rv->csr_sie) ==
+                                        (SUPERVISOR_EXTERNAL_INTR & 0xf)) {
+            /*
+             * These CSRs will be store at kernel stack when guestOS jumps
+             * to save_context() in entry.S. Thus, it is safe to overwrite them
+             * by hardware
+             *
+             * Linux v6.1 source code riscv entry.S ref:
+             * https://github.com/torvalds/linux/blob/830b3c68c1fb1e9176028d02ef86f3cf76aa2476/arch/riscv/kernel/entry.S#L86
+             */
+            rv->csr_sstatus &= ~(SSTATUS_SIE);
+            rv->csr_scause = SUPERVISOR_EXTERNAL_INTR;
+            rv->csr_stval = 0;
+            rv->csr_sepc = rv->PC;
+
+            /*
+             * Jump to entry point of handle trap for external interrupts
+             */
+            rv->PC = (rv->csr_stvec & ~0x3);
+
+            has_external_intr = true;
+            goto trap;
+        }
+#endif /* SYSTEM_MMIO */
     }
+
+#if RV32_HAS(SYSTEM_MMIO)
+    if (has_external_intr) {
+        has_external_intr = false;
+
+        /*
+         * Resume handling the upper level trap
+         */
+        rv->is_trapped = true;
+        goto trap;
+    }
+#endif /* SYSTEM_MMIO */
 
     mpool_free(rv->block_ir_mp, ir);
     prev = NULL;
