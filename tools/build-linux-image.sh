@@ -271,13 +271,13 @@ function do_buildroot
     # over the time
     dd if=/dev/urandom of=${OUTPUT_DIR}/rootfs.ext4 bs=1M count=60
     mkfs.ext4 ${OUTPUT_DIR}/rootfs.ext4
+
+    # Extract rootfs.cpio into ext4 disk image
     mkdir -p ${OUTPUT_DIR}/mnt
-    mount ${OUTPUT_DIR}/rootfs.ext4 ${OUTPUT_DIR}/mnt
-
-    cpio -idmv -D ${OUTPUT_DIR}/mnt < ${OUTPUT_DIR}/rootfs.cpio
-
+    fuse2fs -o fakeroot ${OUTPUT_DIR}/rootfs.ext4 ${OUTPUT_DIR}/mnt
+    fakeroot cpio -idmv -D ${OUTPUT_DIR}/mnt < ${OUTPUT_DIR}/rootfs.cpio
     sync
-    umount ${OUTPUT_DIR}/mnt
+    fusermount3 -u ${OUTPUT_DIR}/mnt
 
     # gzip version of the rootfs.ext4
     gzip -9 -c ${OUTPUT_DIR}/rootfs.ext4 > ${OUTPUT_DIR}/rootfs.ext4.gz
