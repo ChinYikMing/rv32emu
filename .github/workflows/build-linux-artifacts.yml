@@ -73,7 +73,7 @@ jobs:
           make system_defconfig
           make artifact ENABLE_PREBUILT=0
       - name: Create tarball
-        run: tar -zcf /tmp/rv32emu-linux-image-prebuilt.tar.gz -C /tmp rv32emu-linux-image-prebuilt
+        run: ls -al /tmp/rv32emu-linux-image-prebuilt/linux-image && tar -zcf /tmp/rv32emu-linux-image-prebuilt.tar.gz -C /tmp rv32emu-linux-image-prebuilt
       - name: Create GitHub Release
         env:
           GH_TOKEN: ${{ secrets.RV32EMU_PREBUILT_TOKEN }}
