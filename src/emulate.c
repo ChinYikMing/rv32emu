@@ -3731,6 +3731,10 @@ static void __trap_handler(riscv_t *rv)
     assert(ir);
 
     const uint32_t depth = rv->trap_cnt;
+    /* A nested trap overwrites last_csr_sepc, so restore the one of this level
+     * for CHECK_PENDING_SIGNAL after this level returns.
+     */
+    const uint32_t last_csr_sepc = rv->last_csr_sepc;
 
     /* decremented by sret implementation */
     while (rv->trap_cnt >= depth && !rv_has_halted(rv)) {
@@ -3780,6 +3784,7 @@ static void __trap_handler(riscv_t *rv)
 #endif /* SYSTEM_MMIO */
     }
 
+    rv->last_csr_sepc = last_csr_sepc;
     mpool_free(rv->block_ir_mp, ir);
     prev = NULL;
 }
