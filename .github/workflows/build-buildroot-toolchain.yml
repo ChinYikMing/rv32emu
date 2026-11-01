@@ -6,7 +6,7 @@ name: Build Buildroot toolchain
 
 on:
   push:
-    branches: [master]
+    branches: [master, prebuilt-buildroot-toolchain]
     paths:
       - mk/external.mk
       - assets/system/configs/buildroot-toolchain.config
@@ -75,11 +75,11 @@ jobs:
       - name: Publish to rv32emu-prebuilt
         if: >-
           steps.detect.outputs.changed == 'true' &&
-          github.repository == 'sysprog21/rv32emu' &&
-          (github.event_name == 'workflow_dispatch' ||
-           (github.event_name == 'push' && github.ref == 'refs/heads/master'))
+          github.repository == 'ChinYikMing/rv32emu' &&
+          (github.event_name == 'workflow_dispatch' || github.event_name == 'push')
         env:
           GH_TOKEN: ${{ secrets.RV32EMU_PREBUILT_TOKEN }}
+          PREBUILT_REPO: ChinYikMing/prebuilt-test
         working-directory: /tmp/buildroot-toolchain-output/images
         run: |
           ${{ github.workspace }}/.ci/publish-prebuilt.sh Buildroot-Toolchain \

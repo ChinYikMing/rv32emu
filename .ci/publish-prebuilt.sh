@@ -23,7 +23,7 @@ if [ "$#" -lt 2 ]; then
     exit 2
 fi
 
-PREBUILT_REPO=sysprog21/rv32emu-prebuilt
+PREBUILT_REPO=${PREBUILT_REPO:-sysprog21/rv32emu-prebuilt}
 SUFFIX=$1
 shift
 
