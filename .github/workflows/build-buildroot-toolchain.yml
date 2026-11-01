@@ -1,0 +1,86 @@
+name: Build Buildroot toolchain
+
+# Rebuild the riscv32 glibc cross toolchain when the Buildroot version changes
+# and publish it to rv32emu-prebuilt, for use as the external toolchain in
+# assets/system/configs/buildroot.config.
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - mk/external.mk
+      - assets/system/configs/buildroot-toolchain.config
+      - tools/build-buildroot-toolchain.sh
+      - .github/workflows/build-buildroot-toolchain.yml
+  pull_request:
+    paths:
+      - mk/external.mk
+      - assets/system/configs/buildroot-toolchain.config
+      - tools/build-buildroot-toolchain.sh
+      - .github/workflows/build-buildroot-toolchain.yml
+  workflow_dispatch:
+
+concurrency:
+  group: build-buildroot-toolchain-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build-buildroot-toolchain:
+    timeout-minutes: 120  # binutils + gcc (twice) + glibc from scratch
+    # The toolchain is dynamically linked against the runner's glibc, so
+    # keep this on the same Ubuntu release as build-linux-artifacts.yml.
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      # mk/external.mk pins every external dependency; of its changes only a
+      # Buildroot version bump needs a new toolchain.
+      - name: Detect toolchain change
+        id: detect
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          base="$BASE_SHA"
+          if [ -z "$base" ] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            base="HEAD^"
+          fi
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] || \
+             git diff --name-only "$base" HEAD -- \
+               assets/system/configs/buildroot-toolchain.config \
+               tools/build-buildroot-toolchain.sh \
+               .github/workflows/build-buildroot-toolchain.yml | grep -q . || \
+             git diff "$base" HEAD -- mk/external.mk | grep -qE '^[+-]BUILDROOT_VERSION\b'; then
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Install dependencies
+        if: steps.detect.outputs.changed == 'true'
+        run: .ci/apt-install.sh build-essential bison flex git
+      - name: Build Buildroot toolchain
+        if: steps.detect.outputs.changed == 'true'
+        run: make build-buildroot-toolchain
+      - name: Upload Buildroot toolchain artifact
+        if: steps.detect.outputs.changed == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: buildroot-toolchain-prebuilt
+          path: /tmp/buildroot-toolchain-output/images/riscv32-buildroot-linux-gnu_sdk-buildroot.tar.gz
+      - name: Publish to rv32emu-prebuilt
+        if: >-
+          steps.detect.outputs.changed == 'true' &&
+          github.repository == 'sysprog21/rv32emu' &&
+          (github.event_name == 'workflow_dispatch' ||
+           (github.event_name == 'push' && github.ref == 'refs/heads/master'))
+        env:
+          GH_TOKEN: ${{ secrets.RV32EMU_PREBUILT_TOKEN }}
+        working-directory: /tmp/buildroot-toolchain-output/images
+        run: |
+          ${{ github.workspace }}/.ci/publish-prebuilt.sh Buildroot-Toolchain \
+            riscv32-buildroot-linux-gnu_sdk-buildroot.tar.gz
